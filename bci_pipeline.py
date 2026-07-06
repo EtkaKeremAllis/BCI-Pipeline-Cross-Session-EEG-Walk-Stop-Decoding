@@ -2,11 +2,11 @@
 """
 bci_pipeline.py
 ===============================================================================
-Offline Walk/Stop BCI validation pipeline (single-file, v1.1)
+Offline + deployable Walk/Stop BCI pipeline (single-file, v2.0)
 
 EEG (C3/C4/Cz) -> preprocessing -> CSP + feature extraction -> feature
 selection -> shrinkage LDA -> LOOCV validation -> EOG artifact analysis ->
-symbolic joystick command generation (console output only).
+symbolic/real joystick command generation.
 
 No new classifier/model is introduced here. The classification approach
 (CSP + F-score feature selection + shrinkage-regularized LDA) is unchanged
@@ -22,9 +22,11 @@ Usage:
 -------------------------------------------------------------------------------
 IMPORTANT SCOPE NOTE (read this before assuming more than the code does):
 
-This is an OFFLINE validation and SYMBOLIC joystick command generation
-script. It does not provide real-time EEG streaming or real HID/vJoy
-control yet. Every "joystick command" produced here is a printed label
+This file supports two modes:
+  train_validate: labeled EDF + events -> LOOCV validation + final model artifact
+  predict: unlabeled raw EDF + saved model -> predicted timeline + optional joystick output
+It still does not implement live EEG streaming; predict mode is sliding-window
+inference/replay over a fixed EDF recording. Every "joystick command" produced here is a printed label
 (WALK/STOP/IDLE) derived from held-out (LOOCV) predictions on a fixed
 recording - not a live control signal.
 
@@ -63,11 +65,6 @@ v1.2 changes (second code-review pass):
 
 Known future work (not implemented here, flagged deliberately rather than
 silently omitted):
-  - Sliding-window (overlapping) epoching instead of fixed 5s non-overlapping
-    windows, for closer-to-real-time granularity.
-  - A command state machine (majority vote + cooldown) sitting between
-    per-window predictions and emitted commands, to avoid rapid flicker
-    between WALK/STOP/IDLE in a live setting.
   - A real-time acquisition backend (e.g. LSL/BrainFlow) feeding this same
     preprocessing + classifier code path.
 -------------------------------------------------------------------------------
@@ -78,9 +75,11 @@ import json
 import logging
 import os
 import re
+import time
 import warnings
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from collections import deque, Counter
+from dataclasses import dataclass, asdict
 from typing import Dict, List, Tuple, Optional
 
 import numpy as np
@@ -743,6 +742,38 @@ def extract_epochs(preprocessed_dict: Dict[str, np.ndarray],
     return X, np.array(y_out)
 
 
+def build_prediction_windows(signal_len: int, fs: int, window_len: float,
+                             step_len: float) -> List[Tuple[int, int, float, float]]:
+    """Build sliding windows for unlabeled inference.
+
+    Returns [(start_idx, end_idx, start_time, end_time), ...].
+    No event labels are used here.
+    """
+    win_samples = int(round(window_len * fs))
+    step_samples = int(round(step_len * fs))
+    if win_samples <= 0 or step_samples <= 0:
+        raise ValueError("window_len and step_len must be positive")
+    windows = []
+    start = 0
+    while start + win_samples <= signal_len:
+        end = start + win_samples
+        windows.append((start, end, start / fs, end / fs))
+        start += step_samples
+    return windows
+
+
+def extract_prediction_epochs(preprocessed_dict: Dict[str, np.ndarray],
+                              windows: List[Tuple[int, int, float, float]],
+                              channels: List[str]) -> List[Dict[str, np.ndarray]]:
+    X = []
+    max_len = len(next(iter(preprocessed_dict.values())))
+    for start_idx, end_idx, _, _ in windows:
+        if end_idx > max_len:
+            continue
+        X.append({ch: preprocessed_dict[ch][start_idx:end_idx] for ch in channels})
+    return X
+
+
 # ==============================================================================
 # 13) LOOCV VALIDATION
 # ==============================================================================
@@ -967,8 +998,24 @@ def save_trained_model(output_dir: str, pipe: ModernBCIPipeline, channels: List[
 
 
 # ==============================================================================
-# 16) SYMBOLIC JOYSTICK COMMAND LAYER
+# 16) MODEL LOADING + JOYSTICK COMMAND LAYER
 # ==============================================================================
+def config_to_dict(config: BCIConfig) -> Dict:
+    return asdict(config)
+
+
+def config_from_dict(data: Dict) -> BCIConfig:
+    allowed = set(BCIConfig.__dataclass_fields__.keys())
+    clean = {k: v for k, v in (data or {}).items() if k in allowed}
+    return BCIConfig(**clean)
+
+
+def prediction_confidence(prediction: int, walk_probability: float) -> float:
+    """Return confidence for the predicted class, not always P(WALK)."""
+    walk_probability = float(walk_probability)
+    return walk_probability if int(prediction) == 1 else 1.0 - walk_probability
+
+
 def prediction_to_command(prediction: int, confidence: float, threshold: float = 0.6) -> str:
     """
     prediction=1 (WALK) + confidence>=threshold -> "WALK"
@@ -980,41 +1027,199 @@ def prediction_to_command(prediction: int, confidence: float, threshold: float =
     return "WALK" if prediction == 1 else "STOP"
 
 
+def load_trained_model(model_path: str, model_info_path: Optional[str] = None) -> ModernBCIPipeline:
+    """
+    Rebuilds a ModernBCIPipeline from trained_model.npz (+ model_info.json).
+    No fitting is performed here; predict mode only calls predict().
+    """
+    if model_info_path is None:
+        candidate = os.path.join(os.path.dirname(model_path), 'model_info.json')
+        model_info_path = candidate if os.path.exists(candidate) else None
+
+    info = {}
+    if model_info_path and os.path.exists(model_info_path):
+        with open(model_info_path, 'r') as f:
+            info = json.load(f)
+
+    model = np.load(model_path, allow_pickle=True)
+    cfg_dict = info.get('config')
+    if cfg_dict:
+        config = config_from_dict(cfg_dict)
+    else:
+        channels = info.get('channels', REQUIRED_EEG)
+        fs = int(info.get('sampling_rate_hz', 256))
+        shrinkage = float(model['lda_shrinkage']) if 'lda_shrinkage' in model else BEST_SHRINKAGE
+        k = int(len(model['selected_feature_idx'])) if 'selected_feature_idx' in model else BEST_K
+        config = make_config(channels, fs, n_features_select=k, shrinkage=shrinkage)
+        config.confidence_threshold = float(info.get('confidence_threshold', config.confidence_threshold))
+
+    pipe = ModernBCIPipeline(config)
+
+    if 'csp_filters' in model and pipe.csp is not None:
+        pipe.csp.filters = model['csp_filters']
+        pipe.csp.n_components = pipe.csp.filters.shape[1]
+
+    if 'selected_feature_idx' in model and pipe.feature_selector is not None:
+        pipe.feature_selector.selected_idx = model['selected_feature_idx'].astype(int)
+
+    pipe.classifier.coef = model['lda_coef']
+    pipe.classifier.intercept = float(np.asarray(model['lda_intercept']))
+    pipe.classifier.mean_0 = model['lda_mean_0'] if 'lda_mean_0' in model else None
+    pipe.classifier.mean_1 = model['lda_mean_1'] if 'lda_mean_1' in model else None
+    if 'lda_shrinkage' in model:
+        pipe.classifier.shrinkage = float(np.asarray(model['lda_shrinkage']))
+
+    logger.info(
+        f"Loaded trained model: channels={pipe.config.channels}, "
+        f"fs={pipe.config.sampling_rate}Hz, threshold={pipe.config.confidence_threshold}"
+    )
+    return pipe
+
+
 class OutputDevice(ABC):
-    """Abstract output sink for symbolic joystick commands. Concrete
-    real-time backends (e.g. VJoyOutput, ViGEmOutput) should subclass this
-    without changing anything upstream in the command-generation logic."""
+    """Abstract output sink for joystick commands."""
 
     @abstractmethod
     def send(self, command: str) -> None:
         ...
 
+    def close(self) -> None:
+        pass
+
 
 class ConsoleOutput(OutputDevice):
-    """Symbolic output layer - no real vJoy/HID, just prints to the terminal."""
+    """Safe default: prints command changes, without touching real devices."""
+
+    def __init__(self):
+        self.last_printed = None
 
     def send(self, command: str) -> None:
+        # Console output is intentionally quiet on repeated states. Real joystick
+        # backends refresh the axis every call.
+        if command == self.last_printed:
+            return
+        self.last_printed = command
         if command == "WALK":
             print("[JOYSTICK] FORWARD")
         elif command == "STOP":
-            print("[JOYSTICK] STOP")
+            print("[JOYSTICK] STOP / NEUTRAL")
         else:
-            print("[JOYSTICK] IDLE")
+            print("[JOYSTICK] IDLE / NEUTRAL")
+
+
+class ViGEmOutput(OutputDevice):
+    """Windows virtual Xbox controller via pyvgamepad/ViGEmBus."""
+
+    def __init__(self):
+        try:
+            import pyvgamepad as vg
+        except Exception as exc:
+            raise RuntimeError(
+                "ViGEm backend requires ViGEmBus + pyvgamepad. "
+                "Install/configure them first, or use --output-backend console."
+            ) from exc
+        self.vg = vg
+        self.gamepad = vg.VX360Gamepad()
+        self.send("STOP")
+
+    def send(self, command: str) -> None:
+        if command == "WALK":
+            self.gamepad.left_joystick_float(x_value_float=0.0, y_value_float=1.0)
+        else:
+            self.gamepad.left_joystick_float(x_value_float=0.0, y_value_float=0.0)
+        self.gamepad.update()
+
+    def close(self) -> None:
+        try:
+            self.send("STOP")
+        except Exception:
+            pass
+
+
+class VJoyOutput(OutputDevice):
+    """Windows vJoy backend via pyvjoy."""
+
+    def __init__(self, device_id: int = 1):
+        try:
+            import pyvjoy
+        except Exception as exc:
+            raise RuntimeError(
+                "vJoy backend requires the vJoy driver + pyvjoy. "
+                "Install/configure them first, or use --output-backend console."
+            ) from exc
+        self.pyvjoy = pyvjoy
+        self.device = pyvjoy.VJoyDevice(device_id)
+        self.neutral = 0x4000
+        self.forward = 0x8000
+        self.send("STOP")
+
+    def send(self, command: str) -> None:
+        # vJoy axis ranges are driver-dependent; this common 0x0000..0x8000
+        # convention maps WALK to full forward on Y, otherwise neutral.
+        value = self.forward if command == "WALK" else self.neutral
+        self.device.set_axis(self.pyvjoy.HID_USAGE_Y, value)
+
+    def close(self) -> None:
+        try:
+            self.send("STOP")
+        except Exception:
+            pass
+
+
+def make_output_device(backend: str) -> OutputDevice:
+    backend = (backend or 'console').lower()
+    if backend == 'console':
+        return ConsoleOutput()
+    if backend == 'vigem':
+        try:
+            return ViGEmOutput()
+        except Exception as exc:
+            logger.error(f"ViGEm backend unavailable ({exc}); falling back to console.")
+            return ConsoleOutput()
+    if backend == 'vjoy':
+        try:
+            return VJoyOutput()
+        except Exception as exc:
+            logger.error(f"vJoy backend unavailable ({exc}); falling back to console.")
+            return ConsoleOutput()
+    raise ValueError(f"Unknown output backend: {backend}")
+
+
+class CommandSmoother:
+    def __init__(self, majority_window: int = 5, min_confidence: float = 0.6, cooldown_s: float = 0.5):
+        self.majority_window = int(majority_window)
+        self.min_confidence = float(min_confidence)
+        self.cooldown_s = float(cooldown_s)
+        self.history = deque(maxlen=self.majority_window)
+        self.current_command = "IDLE"
+        self.last_change_time = -1e9
+
+    def update(self, raw_command: str, confidence: float, now_s: float) -> str:
+        command = raw_command if confidence >= self.min_confidence else "IDLE"
+        self.history.append(command)
+        counts = Counter(self.history)
+        majority_command = counts.most_common(1)[0][0]
+        if majority_command != self.current_command:
+            if (now_s - self.last_change_time) >= self.cooldown_s:
+                self.current_command = majority_command
+                self.last_change_time = now_s
+        return self.current_command
 
 
 def generate_symbolic_commands(y_pred: np.ndarray, y_conf: np.ndarray,
                                 threshold: float, emit: bool = True,
                                 device: Optional[OutputDevice] = None) -> List[Dict]:
     """
-    Generates window-by-window symbolic commands from LOOCV's held-out
-    (y_pred, y_conf) pairs. If emit=True, each command is also sent to
-    `device` (defaults to ConsoleOutput).
+    Generates window-by-window symbolic commands from LOOCV held-out
+    predictions. y_conf is P(WALK), so command confidence is converted to
+    the predicted class confidence before thresholding.
     """
     if emit and device is None:
         device = ConsoleOutput()
     rows = []
-    for i, (pred, conf) in enumerate(zip(y_pred, y_conf)):
-        command = prediction_to_command(int(pred), float(conf), threshold)
+    for i, (pred, p_walk) in enumerate(zip(y_pred, y_conf)):
+        conf = prediction_confidence(int(pred), float(p_walk))
+        command = prediction_to_command(int(pred), conf, threshold)
         rows.append({
             'window_index': i, 'predicted_label': int(pred),
             'confidence': float(conf), 'command': command,
@@ -1245,14 +1450,26 @@ def plot_accuracy_comparison(results: Dict, output_dir: str):
     plt.close(fig)
 
 
-# ==============================================================================
+# ======================================================================
 # 19) CLI / MAIN
-# ==============================================================================
+# ======================================================================
 LABEL_MAP = {'x5': 0, 'x8': 1}  # x5=STOP=0, x8=WALK=1. x99 not in map -> dropped.
 REQUIRED_EEG = ['C3', 'C4', 'Cz']
 REQUIRED_EOG = ['EOG_HL', 'EOG_HR', 'EOG_VA', 'EOG_VB']
 BEST_SHRINKAGE = 0.0
 BEST_K = 5
+
+SCIENCE_NOTE = (
+    "This prediction mode estimates Walk/Stop command periods from EEG using a "
+    "previously trained model. It does not prove pure brain-only walking intention "
+    "decoding, and performance depends on training data, artifacts, and "
+    "subject/session similarity."
+)
+GENERALIZATION_RISK = (
+    "Important technical risk: if the model was trained on sub-01 or one specific "
+    "session, it may generalize poorly to another subject, another day, another cap "
+    "placement, or a noisier recording."
+)
 
 
 def make_config(channels: List[str], sampling_rate: int,
@@ -1269,37 +1486,48 @@ def make_config(channels: List[str], sampling_rate: int,
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Offline Walk/Stop BCI validation + symbolic joystick command generation"
+        description="Walk/Stop BCI: labeled validation/training or unlabeled EDF prediction"
     )
+    parser.add_argument('--mode', choices=['train_validate', 'predict'], default='train_validate',
+                        help="train_validate = labeled LOOCV + final model; predict = unlabeled EDF inference")
     parser.add_argument('--edf', required=True, help="Path to EDF file")
-    parser.add_argument('--events', required=True, help="Path to rexcommand events file (TSV preferred, PDF fallback)")
-    parser.add_argument('--output-dir', default='results', help="Output directory (default: results)")
+    parser.add_argument('--events', required=False,
+                        help="Path to labeled rexcommand events file; required only in train_validate mode")
+    parser.add_argument('--model', required=False, help="Path to trained_model.npz; required only in predict mode")
+    parser.add_argument('--model-info', required=False,
+                        help="Optional path to model_info.json; defaults to model directory/model_info.json")
+    parser.add_argument('--output-dir', default='results', help="Output directory")
     parser.add_argument('--window-len', type=float, default=5.0, help="Window length (seconds)")
-    parser.add_argument('--skip-start', type=float, default=1.0, help="Time trimmed from event start (s)")
-    parser.add_argument('--skip-end', type=float, default=1.0, help="Time trimmed from event end (s)")
+    parser.add_argument('--step-len', type=float, default=1.0, help="Prediction sliding-window step length (seconds)")
+    parser.add_argument('--skip-start', type=float, default=1.0, help="Time trimmed from event start (s), train_validate only")
+    parser.add_argument('--skip-end', type=float, default=1.0, help="Time trimmed from event end (s), train_validate only")
     parser.add_argument('--confidence-threshold', type=float, default=0.6,
-                         help="Minimum confidence for WALK/STOP (below this -> IDLE)")
+                        help="Minimum predicted-class confidence for WALK/STOP; below this -> IDLE")
+    parser.add_argument('--output-backend', choices=['console', 'vigem', 'vjoy'], default='console',
+                        help="Joystick output backend. Default console is safest.")
+    parser.add_argument('--replay', action='store_true',
+                        help="In predict mode, emit window commands sequentially as a replay over the EDF")
+    parser.add_argument('--replay-speed', type=float, default=1.0,
+                        help="Replay speed: 1.0 real-time, 5.0 five times faster, 0 no waiting")
+    parser.add_argument('--majority-window', type=int, default=5, help="Command smoother majority window")
+    parser.add_argument('--cooldown-s', type=float, default=0.5, help="Minimum seconds between smoothed command changes")
     parser.add_argument('--seed', type=int, default=42, help="Random seed")
     return parser
 
 
-def main():
-    args = build_arg_parser().parse_args()
-    np.random.seed(args.seed)
+def run_train_validate(args) -> None:
+    if not args.events:
+        raise ValueError("--events is required in --mode train_validate")
 
     print("=" * 70)
-    print("BCI PIPELINE v1.1 - Offline Walk/Stop validation")
+    print("BCI PIPELINE v2.0 - train_validate mode")
     print("=" * 70)
 
-    # 1) Load data + validate channels
     signals, info = load_data(args.edf)
     fs = int(round(info['sampling_rate'][REQUIRED_EEG[0]]))
     validate_channels(info, REQUIRED_EEG, REQUIRED_EOG)
 
-    # 2) Load events
     usable_events, dropped_events = load_events(args.events, LABEL_MAP)
-
-    # 3) Epoch/window extraction
     windows = build_windows(usable_events, fs, args.skip_start, args.skip_end, args.window_len)
     n_stop = sum(1 for _, _, lbl in windows if lbl == 0)
     n_walk = sum(1 for _, _, lbl in windows if lbl == 1)
@@ -1307,19 +1535,16 @@ def main():
 
     config_factory = lambda channels: make_config(channels, fs)
 
-    # 4) Artifact tests (A: EEG, B: EOG, C: EEG+EOG)
-    artifact_results = run_artifact_checks(config_factory, REQUIRED_EEG, REQUIRED_EOG,
-                                            signals, windows)
+    artifact_results = run_artifact_checks(config_factory, REQUIRED_EEG, REQUIRED_EOG, signals, windows)
     preproc_eeg = artifact_results.pop('_preproc_eeg')
     preproc_eog = artifact_results.pop('_preproc_eog')
 
-    # 5) EOG correlation analysis
     corr_rows = run_eog_correlation_analysis(preproc_eeg, preproc_eog, windows)
 
-    # 6) EOG cleaning test
     config_eeg = config_factory(REQUIRED_EEG)
+    config_eeg.confidence_threshold = args.confidence_threshold
     result_clean = run_eog_cleaning_analysis(config_eeg, REQUIRED_EEG, preproc_eeg,
-                                              preproc_eog, REQUIRED_EOG, windows)
+                                             preproc_eog, REQUIRED_EOG, windows)
     r2_per_channel = result_clean.pop('r2_per_channel')
 
     results = {
@@ -1329,31 +1554,28 @@ def main():
         'eog_cleaned': result_clean,
     }
 
-    # 7) Final model (deployable, trained on all data - NOT used for commands.csv)
     X_eeg, y_eeg = extract_epochs(preproc_eeg, windows, REQUIRED_EEG)
     final_pipe = train_final_model(config_eeg, X_eeg, y_eeg)
 
-    # 8) Symbolic commands - generated from LOOCV held-out predictions, for honesty
     commands = generate_symbolic_commands(
         results['raw_eeg']['y_pred'], results['raw_eeg']['y_conf'],
         threshold=args.confidence_threshold, emit=True
     )
 
-    # 9) Summary + save (metrics, predictions, confusion matrices, EOG analysis)
+    os.makedirs(args.output_dir, exist_ok=True)
     summary_text = print_summary(results)
+    summary_text += "\n\n" + GENERALIZATION_RISK + "\n"
     save_results(args.output_dir, results, corr_rows, r2_per_channel, commands)
     with open(f"{args.output_dir}/summary.txt", 'w') as f:
         f.write(summary_text)
 
-    # 10) Persist the final model itself (trained_model.npz, csp_filters.npy,
-    #     selected_features.json) - previously built and discarded in memory
     model_save_info = save_trained_model(args.output_dir, final_pipe, REQUIRED_EEG)
 
-    # 11) Model card: everything needed to know what this model is, without
-    #     re-running the script
     model_info = {
+        'mode': 'train_validate',
         'sampling_rate_hz': fs,
         'channels': REQUIRED_EEG,
+        'config': config_to_dict(config_eeg),
         'n_features_total': model_save_info['n_features_total'],
         'n_features_selected': model_save_info['n_features_selected'],
         'csp_n_filters': model_save_info['csp_n_filters'],
@@ -1372,33 +1594,218 @@ def main():
             'n_walk_windows': n_walk,
         },
         'scope_note': (
-            "Offline validation only. trained_model.npz is trained on ALL usable "
-            "trials for future reuse; it was never evaluated on held-out data "
-            "itself (that would leak). commands.csv reflects LOOCV held-out "
-            "predictions, not this model's own predictions."
+            "train_validate mode uses labeled EEG and event annotations to validate "
+            "the model and train a final deployable model. commands.csv reflects "
+            "LOOCV held-out predictions, not the final model's predictions on its own training data."
         ),
+        'generalization_risk': GENERALIZATION_RISK,
     }
     with open(f"{args.output_dir}/model_info.json", 'w') as f:
         json.dump(model_info, f, indent=2)
 
-    # 12) Plots (ROC curve, confusion matrices, accuracy comparison)
     plot_roc_curve(results, args.output_dir, condition='raw_eeg')
     plot_confusion_matrices(results, args.output_dir)
     plot_accuracy_comparison(results, args.output_dir)
 
     print("\n" + "=" * 70)
-    print("This is an offline validation and symbolic joystick command generation")
-    print("script. It does not provide real-time EEG streaming or real HID/vJoy")
-    print("control yet.")
+    print("train_validate complete: validation outputs + final trained_model.npz written.")
+    print("Use --mode predict with a raw unlabeled EDF to generate predicted_timeline.csv.")
     print("=" * 70)
+
+
+def predict_unlabeled_timeline(pipe: ModernBCIPipeline,
+                               preprocessed_eeg: Dict[str, np.ndarray],
+                               windows: List[Tuple[int, int, float, float]],
+                               threshold: float,
+                               smoother: CommandSmoother,
+                               output: Optional[OutputDevice] = None,
+                               replay: bool = False,
+                               replay_speed: float = 1.0) -> Tuple[List[Dict], List[Dict]]:
+    epochs = extract_prediction_epochs(preprocessed_eeg, windows, pipe.config.channels)
+    if not epochs:
+        raise ValueError("No prediction windows could be built. Check EDF length/window_len/step_len.")
+
+    y_pred, p_walk = pipe.predict(epochs)
+    rows = []
+    command_log = []
+
+    previous_wall_time = time.time()
+    for i, ((start_idx, end_idx, start_time_s, end_time_s), pred, p1) in enumerate(zip(windows, y_pred, p_walk)):
+        conf = prediction_confidence(int(pred), float(p1))
+        raw_command = prediction_to_command(int(pred), conf, threshold)
+        smoothed_command = smoother.update(raw_command, conf, start_time_s)
+
+        row = {
+            'window_index': i,
+            'start_time': float(start_time_s),
+            'end_time': float(end_time_s),
+            'predicted_label': int(pred),
+            'confidence': float(conf),
+            'p_walk': float(p1),
+            'raw_command': raw_command,
+            'smoothed_command': smoothed_command,
+        }
+        rows.append(row)
+
+        if output is not None and replay:
+            output.send(smoothed_command)
+            command_log.append({
+                'window_index': i,
+                'sent_time_wall_clock': time.time(),
+                'edf_start_time': float(start_time_s),
+                'command': smoothed_command,
+            })
+            if replay_speed > 0 and i < len(windows) - 1:
+                next_start = windows[i + 1][2]
+                wait_s = max(0.0, (next_start - start_time_s) / replay_speed)
+                time.sleep(wait_s)
+                previous_wall_time = time.time()
+
+    return rows, command_log
+
+
+def save_prediction_outputs(output_dir: str, rows: List[Dict], command_log: List[Dict],
+                            args, pipe: ModernBCIPipeline, info: Dict) -> None:
+    os.makedirs(output_dir, exist_ok=True)
+
+    timeline_path = f"{output_dir}/predicted_timeline.csv"
+    with open(timeline_path, 'w', newline='') as f:
+        fieldnames = ['window_index', 'start_time', 'end_time', 'predicted_label',
+                      'confidence', 'p_walk', 'raw_command', 'smoothed_command']
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    commands_path = f"{output_dir}/predicted_commands.csv"
+    with open(commands_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['window_index', 'start_time', 'end_time', 'raw_command', 'smoothed_command'])
+        for row in rows:
+            writer.writerow([row['window_index'], row['start_time'], row['end_time'],
+                             row['raw_command'], row['smoothed_command']])
+
+    if command_log:
+        with open(f"{output_dir}/command_log.csv", 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=['window_index', 'sent_time_wall_clock', 'edf_start_time', 'command'])
+            writer.writeheader()
+            writer.writerows(command_log)
+
+    counts_raw = Counter(row['raw_command'] for row in rows)
+    counts_smooth = Counter(row['smoothed_command'] for row in rows)
+    mean_conf = float(np.mean([row['confidence'] for row in rows])) if rows else float('nan')
+    summary_lines = [
+        "BCI prediction summary",
+        "======================",
+        "No ground-truth events were provided. This is inference only; accuracy cannot be computed.",
+        SCIENCE_NOTE,
+        GENERALIZATION_RISK,
+        "",
+        f"EDF: {args.edf}",
+        f"Model: {args.model}",
+        f"Channels: {pipe.config.channels}",
+        f"Sampling rate: {pipe.config.sampling_rate} Hz",
+        f"Window length: {args.window_len} s",
+        f"Step length: {args.step_len} s",
+        f"Confidence threshold: {args.confidence_threshold}",
+        f"Replay: {args.replay}",
+        f"Output backend: {args.output_backend}",
+        f"Number of windows: {len(rows)}",
+        f"Mean predicted-class confidence: {mean_conf:.3f}",
+        f"Raw command counts: {dict(counts_raw)}",
+        f"Smoothed command counts: {dict(counts_smooth)}",
+        "",
+        "Outputs:",
+        "- predicted_timeline.csv: raw + smoothed window-by-window inference",
+        "- predicted_commands.csv: compact command timeline",
+        "- command_log.csv: only written when replay emitted commands",
+    ]
+    with open(f"{output_dir}/prediction_summary.txt", 'w') as f:
+        f.write("\n".join(summary_lines) + "\n")
+
+    logger.info(f"Prediction outputs written: {output_dir}/")
+
+
+def run_predict(args) -> None:
+    if not args.model:
+        raise ValueError("--model is required in --mode predict")
+
+    print("=" * 70)
+    print("BCI PIPELINE v2.0 - predict mode")
+    print("=" * 70)
+    print("No ground-truth events were provided. This is inference only; accuracy cannot be computed.")
+    print(SCIENCE_NOTE)
+
+    pipe = load_trained_model(args.model, args.model_info)
+    pipe.config.confidence_threshold = args.confidence_threshold
+
+    signals, info = load_data(args.edf)
+    missing = [ch for ch in pipe.config.channels if ch not in signals]
+    if missing:
+        raise ValueError(f"Predict EDF is missing model-required channels: {missing}")
+
+    fs_file = int(round(info['sampling_rate'][pipe.config.channels[0]]))
+    if fs_file != int(pipe.config.sampling_rate):
+        logger.warning(
+            f"EDF sampling rate ({fs_file}Hz) differs from model sampling rate "
+            f"({pipe.config.sampling_rate}Hz). This script does not resample; results may be invalid."
+        )
+
+    raw_eeg = {ch: signals[ch] for ch in pipe.config.channels}
+    preproc_eeg = pipe.preprocess(raw_eeg)
+    signal_len = min(len(preproc_eeg[ch]) for ch in pipe.config.channels)
+    windows = build_prediction_windows(signal_len, pipe.config.sampling_rate, args.window_len, args.step_len)
+    logger.info(f"{len(windows)} unlabeled prediction windows built")
+
+    smoother = CommandSmoother(
+        majority_window=args.majority_window,
+        min_confidence=args.confidence_threshold,
+        cooldown_s=args.cooldown_s,
+    )
+    output = make_output_device(args.output_backend)
+
+    try:
+        rows, command_log = predict_unlabeled_timeline(
+            pipe, preproc_eeg, windows, args.confidence_threshold,
+            smoother=smoother,
+            output=output,
+            replay=args.replay,
+            replay_speed=args.replay_speed,
+        )
+    except KeyboardInterrupt:
+        logger.warning("Ctrl+C received. Sending neutral command before exit.")
+        raise
+    finally:
+        # Safety: real backends must always release the stick to neutral.
+        try:
+            output.send("STOP")
+        finally:
+            output.close()
+
+    save_prediction_outputs(args.output_dir, rows, command_log, args, pipe, info)
+    print("\n" + "=" * 70)
+    print("predict complete: predicted_timeline.csv and predicted_commands.csv written.")
+    print(GENERALIZATION_RISK)
+    print("=" * 70)
+
+
+def main():
+    args = build_arg_parser().parse_args()
+    np.random.seed(args.seed)
+    if args.mode == 'train_validate':
+        run_train_validate(args)
+    elif args.mode == 'predict':
+        run_predict(args)
+    else:
+        raise ValueError(f"Unknown mode: {args.mode}")
 
 
 if __name__ == "__main__":
     main()
 
 # -------------------------------------------------------------------------------
-# SCOPE DISCLAIMER (repeated here deliberately, per project requirement):
+# SCOPE DISCLAIMER:
 #
-# This is an offline validation and symbolic joystick command generation script.
-# It does not provide real-time EEG streaming or real HID/vJoy control yet.
+# train_validate mode uses labeled EEG + event annotations for LOOCV validation
+# and final deployable model training. predict mode uses only raw EDF + a saved
+# trained model; no events are read and no accuracy is computed.
 # -------------------------------------------------------------------------------
