@@ -42,6 +42,25 @@ v1.1 changes (code-review follow-up):
   - Everything else (CSP, feature selection, shrinkage LDA, LOOCV, EOG
     artifact analysis) is unchanged from v1.0.
 
+v1.2 changes (second code-review pass):
+  - The final model (trained on all usable trials, config_eeg/REQUIRED_EEG)
+    is now actually persisted to disk as trained_model.npz (LDA weights,
+    CSP filters, selected feature indices) instead of being built and
+    discarded in memory.
+  - selected_features.json now records which named features the F-score
+    selector kept (and their scores), not just their raw indices.
+  - csp_filters.npy is written as a standalone array for anyone who wants
+    the spatial filters without touching the .npz bundle.
+  - model_info.json is written as a model card: sampling rate, channels,
+    feature count, CSP filter count, LDA shrinkage, LOOCV accuracy, and
+    basic dataset provenance (EDF path, patient/recording id, n windows).
+  - roc_curve.png, confusion_matrices.png, and accuracy_comparison.png are
+    generated from the same LOOCV results already computed, for anyone
+    browsing the repo without running the script.
+  Note: the trained model artifact is for future reuse only. commands.csv
+  is still generated exclusively from LOOCV's held-out predictions, never
+  from this saved model's own predictions on its training data.
+
 Known future work (not implemented here, flagged deliberately rather than
 silently omitted):
   - Sliding-window (overlapping) epoching instead of fixed 5s non-overlapping
@@ -67,6 +86,10 @@ from typing import Dict, List, Tuple, Optional
 import numpy as np
 from scipy import signal, stats
 from scipy.linalg import eig
+
+import matplotlib
+matplotlib.use('Agg')  # headless: never try to open a GUI window
+import matplotlib.pyplot as plt
 
 warnings.filterwarnings('ignore')
 
@@ -257,6 +280,22 @@ class BCIConfig:
 # ==============================================================================
 # 4) FEATURE EXTRACTION
 # ==============================================================================
+# These two lists mirror the exact key-insertion order inside
+# extract_time_domain() / extract_frequency_domain() below. They exist so we
+# can label the final feature vector by name (selected_features.json,
+# model_info.json) without having to re-run extraction just to recover names.
+TIME_FEATURE_NAMES = [
+    'mean', 'std', 'var', 'min', 'max', 'range', 'rms', 'peak_to_peak',
+    'kurtosis', 'skewness', 'line_length', 'hjorth_activity',
+    'hjorth_mobility', 'hjorth_complexity', 'zero_crossings', 'spectral_entropy',
+]
+FREQ_FEATURE_NAMES = [
+    'Delta_power', 'Theta_power', 'Alpha_power', 'Mu_power', 'Beta_power',
+    'Gamma_power', 'mu_beta_ratio', 'beta_mu_ratio', 'alpha_theta_ratio',
+    'spectral_centroid', 'total_power',
+]
+
+
 class AdvancedFeatureExtractor:
     """Time-domain + frequency-domain + spatial features."""
 
@@ -610,6 +649,33 @@ class ModernBCIPipeline:
             return np.concatenate([stat_features, csp_features])
         return stat_features
 
+    def feature_name_list(self, present_channels: List[str]) -> List[str]:
+        """
+        Returns feature names in exactly the order extract_full_features()
+        concatenates them, so any downstream index (e.g. a FeatureSelector's
+        selected_idx) can be turned into a human-readable label. Mirrors:
+          for ch in sorted(present_channels): time-domain names, freq-domain names
+          [asymmetry] if >=2 channels
+          [csp_logvar_i] * csp_n_filters, if CSP is enabled
+        """
+        names = []
+        sorted_channels = sorted(present_channels)
+        for ch in sorted_channels:
+            for feat_name in TIME_FEATURE_NAMES + FREQ_FEATURE_NAMES:
+                names.append(f"{ch}_{feat_name}")
+        if len(sorted_channels) >= 2:
+            names.append(f"asymmetry_{sorted_channels[0]}_{sorted_channels[1]}")
+        if self.config.use_csp and self.csp is not None and self.csp.filters is not None:
+            # Use the actual fitted filter count, not the configured target:
+            # eig() can only return as many spatial filters as there are
+            # channels, so csp_n_filters is silently capped when n_channels
+            # < csp_n_filters. Naming must follow the real fitted shape or
+            # names/vector lengths drift apart.
+            n_fitted = self.csp.filters.shape[1]
+            for i in range(n_fitted):
+                names.append(f"csp_logvar_{i}")
+        return names
+
     def train(self, raw_trials: List[Dict[str, np.ndarray]], y: np.ndarray):
         y = np.asarray(y)
         if self.config.use_csp and self.csp is not None:
@@ -844,6 +910,62 @@ def train_final_model(config: BCIConfig, X: List[Dict[str, np.ndarray]],
     return pipe
 
 
+def save_trained_model(output_dir: str, pipe: ModernBCIPipeline, channels: List[str]) -> Dict:
+    """
+    Persists the final deployable model to trained_model.npz, plus a
+    standalone csp_filters.npy and a selected_features.json naming which
+    features the F-score selector kept.
+
+    Returns a small dict of what was saved, so callers (e.g. main()) can
+    fold the same numbers into model_info.json without recomputing them.
+    """
+    clf = pipe.classifier
+    feature_names = pipe.feature_name_list(channels)
+
+    npz_payload = {
+        'lda_coef': clf.coef,
+        'lda_intercept': np.array(clf.intercept),
+        'lda_mean_0': clf.mean_0,
+        'lda_mean_1': clf.mean_1,
+        'lda_shrinkage': np.array(pipe.config.lda_shrinkage),
+    }
+
+    selected_idx = None
+    f_scores = None
+    if pipe.feature_selector is not None and pipe.feature_selector.selected_idx is not None:
+        selected_idx = pipe.feature_selector.selected_idx
+        f_scores = pipe.feature_selector.f_scores_
+        npz_payload['selected_feature_idx'] = selected_idx
+
+    csp_filters = None
+    if pipe.csp is not None and pipe.csp.filters is not None:
+        csp_filters = pipe.csp.filters
+        npz_payload['csp_filters'] = csp_filters
+        np.save(f"{output_dir}/csp_filters.npy", csp_filters)
+
+    np.savez(f"{output_dir}/trained_model.npz", **npz_payload)
+
+    if selected_idx is not None:
+        selected_features = []
+        for rank, idx in enumerate(selected_idx):
+            entry = {
+                'rank': rank,
+                'feature_index': int(idx),
+                'feature_name': feature_names[idx] if idx < len(feature_names) else f"feature_{idx}",
+            }
+            if f_scores is not None:
+                entry['f_score'] = float(f_scores[idx])
+            selected_features.append(entry)
+        with open(f"{output_dir}/selected_features.json", 'w') as f:
+            json.dump(selected_features, f, indent=2)
+
+    return {
+        'n_features_total': len(feature_names),
+        'n_features_selected': int(len(selected_idx)) if selected_idx is not None else len(feature_names),
+        'csp_n_filters': int(csp_filters.shape[1]) if csp_filters is not None else 0,
+    }
+
+
 # ==============================================================================
 # 16) SYMBOLIC JOYSTICK COMMAND LAYER
 # ==============================================================================
@@ -1043,6 +1165,87 @@ def print_summary(results: Dict) -> str:
 
 
 # ==============================================================================
+# 18b) PLOTS
+# ==============================================================================
+def _roc_curve_points(y_true: np.ndarray, y_score: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Simple dependency-free ROC curve: sweep the observed confidence scores
+    as thresholds and compute (FPR, TPR) at each. Same y_true/y_score already
+    used for the AUC in run_loocv - this just also keeps the curve, not only
+    the summary number."""
+    y_true = np.asarray(y_true)
+    y_score = np.asarray(y_score)
+    thresholds = np.unique(y_score)[::-1]
+    thresholds = np.concatenate([[thresholds[0] + 1e-6], thresholds, [thresholds[-1] - 1e-6]])
+    tpr, fpr = [], []
+    n_pos = np.sum(y_true == 1)
+    n_neg = np.sum(y_true == 0)
+    for t in thresholds:
+        pred = (y_score >= t).astype(int)
+        tp = np.sum((pred == 1) & (y_true == 1))
+        fp = np.sum((pred == 1) & (y_true == 0))
+        tpr.append(tp / n_pos if n_pos > 0 else 0.0)
+        fpr.append(fp / n_neg if n_neg > 0 else 0.0)
+    return np.array(fpr), np.array(tpr), thresholds
+
+
+def plot_roc_curve(results: Dict, output_dir: str, condition: str = 'raw_eeg'):
+    r = results[condition]
+    fpr, tpr, _ = _roc_curve_points(r['y_true'], r['y_conf'])
+    fig, ax = plt.subplots(figsize=(5, 5))
+    ax.plot(fpr, tpr, marker='o', markersize=3, label=f"AUC = {r['roc_auc']:.3f}")
+    ax.plot([0, 1], [0, 1], linestyle='--', color='gray', label='Chance')
+    ax.set_xlabel('False Positive Rate')
+    ax.set_ylabel('True Positive Rate')
+    ax.set_title(f"ROC Curve - {condition} (LOOCV held-out predictions)")
+    ax.legend(loc='lower right')
+    ax.set_xlim(-0.02, 1.02)
+    ax.set_ylim(-0.02, 1.02)
+    fig.tight_layout()
+    fig.savefig(f"{output_dir}/roc_curve.png", dpi=150)
+    plt.close(fig)
+
+
+def plot_confusion_matrices(results: Dict, output_dir: str):
+    conditions = [('raw_eeg', 'A) EEG only'), ('eog_only', 'B) EOG only'),
+                  ('eeg_plus_eog', 'C) EEG+EOG'), ('eog_cleaned', 'D) EOG-cleaned EEG')]
+    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+    for ax, (key, title) in zip(axes, conditions):
+        tn, fp, fn, tp = results[key]['confusion']
+        mat = np.array([[tn, fp], [fn, tp]])
+        im = ax.imshow(mat, cmap='Blues')
+        for i in range(2):
+            for j in range(2):
+                ax.text(j, i, str(mat[i, j]), ha='center', va='center',
+                        color='white' if mat[i, j] > mat.max() / 2 else 'black')
+        ax.set_xticks([0, 1]); ax.set_xticklabels(['Pred STOP', 'Pred WALK'])
+        ax.set_yticks([0, 1]); ax.set_yticklabels(['True STOP', 'True WALK'])
+        ax.set_title(title, fontsize=10)
+    fig.suptitle('Confusion Matrices (LOOCV)')
+    fig.tight_layout()
+    fig.savefig(f"{output_dir}/confusion_matrices.png", dpi=150)
+    plt.close(fig)
+
+
+def plot_accuracy_comparison(results: Dict, output_dir: str):
+    labels = ['A) EEG only', 'B) EOG only', 'C) EEG+EOG', 'D) EOG-cleaned EEG']
+    keys = ['raw_eeg', 'eog_only', 'eeg_plus_eog', 'eog_cleaned']
+    accs = [results[k]['accuracy'] for k in keys]
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    bars = ax.bar(labels, accs, color=['#4C72B0', '#C44E52', '#55A868', '#8172B2'])
+    ax.axhline(0.5, linestyle='--', color='gray', label='Chance (2-class)')
+    ax.set_ylim(0, 1.0)
+    ax.set_ylabel('LOOCV Accuracy')
+    ax.set_title('Accuracy by Condition')
+    for bar, acc in zip(bars, accs):
+        ax.text(bar.get_x() + bar.get_width() / 2, acc + 0.02, f"{acc:.1%}", ha='center', fontsize=9)
+    ax.legend()
+    plt.setp(ax.get_xticklabels(), rotation=15, ha='right')
+    fig.tight_layout()
+    fig.savefig(f"{output_dir}/accuracy_comparison.png", dpi=150)
+    plt.close(fig)
+
+
+# ==============================================================================
 # 19) CLI / MAIN
 # ==============================================================================
 LABEL_MAP = {'x5': 0, 'x8': 1}  # x5=STOP=0, x8=WALK=1. x99 not in map -> dropped.
@@ -1128,7 +1331,7 @@ def main():
 
     # 7) Final model (deployable, trained on all data - NOT used for commands.csv)
     X_eeg, y_eeg = extract_epochs(preproc_eeg, windows, REQUIRED_EEG)
-    _final_pipe = train_final_model(config_eeg, X_eeg, y_eeg)
+    final_pipe = train_final_model(config_eeg, X_eeg, y_eeg)
 
     # 8) Symbolic commands - generated from LOOCV held-out predictions, for honesty
     commands = generate_symbolic_commands(
@@ -1136,11 +1339,52 @@ def main():
         threshold=args.confidence_threshold, emit=True
     )
 
-    # 9) Summary + save
+    # 9) Summary + save (metrics, predictions, confusion matrices, EOG analysis)
     summary_text = print_summary(results)
     save_results(args.output_dir, results, corr_rows, r2_per_channel, commands)
     with open(f"{args.output_dir}/summary.txt", 'w') as f:
         f.write(summary_text)
+
+    # 10) Persist the final model itself (trained_model.npz, csp_filters.npy,
+    #     selected_features.json) - previously built and discarded in memory
+    model_save_info = save_trained_model(args.output_dir, final_pipe, REQUIRED_EEG)
+
+    # 11) Model card: everything needed to know what this model is, without
+    #     re-running the script
+    model_info = {
+        'sampling_rate_hz': fs,
+        'channels': REQUIRED_EEG,
+        'n_features_total': model_save_info['n_features_total'],
+        'n_features_selected': model_save_info['n_features_selected'],
+        'csp_n_filters': model_save_info['csp_n_filters'],
+        'lda_shrinkage': config_eeg.lda_shrinkage,
+        'confidence_threshold': args.confidence_threshold,
+        'loocv_accuracy_raw_eeg': results['raw_eeg']['accuracy'],
+        'loocv_roc_auc_raw_eeg': results['raw_eeg']['roc_auc'],
+        'loocv_f1_raw_eeg': results['raw_eeg']['f1'],
+        'dataset': {
+            'edf_path': args.edf,
+            'events_path': args.events,
+            'patient_id': info.get('patient_id', ''),
+            'recording_id': info.get('recording_id', ''),
+            'n_windows': len(windows),
+            'n_stop_windows': n_stop,
+            'n_walk_windows': n_walk,
+        },
+        'scope_note': (
+            "Offline validation only. trained_model.npz is trained on ALL usable "
+            "trials for future reuse; it was never evaluated on held-out data "
+            "itself (that would leak). commands.csv reflects LOOCV held-out "
+            "predictions, not this model's own predictions."
+        ),
+    }
+    with open(f"{args.output_dir}/model_info.json", 'w') as f:
+        json.dump(model_info, f, indent=2)
+
+    # 12) Plots (ROC curve, confusion matrices, accuracy comparison)
+    plot_roc_curve(results, args.output_dir, condition='raw_eeg')
+    plot_confusion_matrices(results, args.output_dir)
+    plot_accuracy_comparison(results, args.output_dir)
 
     print("\n" + "=" * 70)
     print("This is an offline validation and symbolic joystick command generation")
