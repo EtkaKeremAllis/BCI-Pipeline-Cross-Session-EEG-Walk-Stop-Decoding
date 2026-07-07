@@ -13,7 +13,7 @@ control — every "joystick command" produced is a label derived from held-out
 (LOOCV) predictions on a fixed recording, written to the terminal/CSV.
 
 ## Main file
-- `bci_pipeline.py` — current version (v3.6): a single file, CLI-enabled, containing the entire pipeline.
+- `bci_pipeline.py` — current version (v2.8): a single file, CLI-enabled, containing the entire pipeline.
 
 ## Historical / dependency files (used in early versions)
 - `modern_bci_v2.py` — the core signal processing engine (the first versions had a modular
