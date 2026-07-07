@@ -69,7 +69,7 @@ def get_feature_names(channels, n_csp_filters=0):
 # SLIDING WINDOWS (deployment-style: tam kayıt üzerinde)
 # ============================================================================
 
-def build_sliding_windows(signal_len, fs, window_len=5.0, step_len=1.0):
+def build_sliding_windows(signal_len, fs, window_len=3.0, step_len=0.25):
     """
     Tüm kayıt üzerinde overlapping sliding window'lar üretir (deployment-style).
     Event-anchored, etiketli eğitim pencereleriyle KARIŞTIRILMAMALI.
@@ -118,7 +118,7 @@ def label_windows_from_events(windows, events, overlap_threshold=0.5):
     return np.array(labels)
 
 
-def extract_command_training_windows(events, fs, skip_start=1.0, skip_end=1.0, window_len=5.0):
+def extract_command_training_windows(events, fs, skip_start=1.0, skip_end=1.0, window_len=3.0):
     """
     Eğitim için event-ANKORLU, non-overlapping pencereler (x5/x8 SADECE).
     Bu, deployment sliding window'undan FARKLI ve BİLE İSTEYEREK öyle -
@@ -155,8 +155,8 @@ class DeployableBCIModel:
 
     def __init__(self, channels, sampling_rate, bandpass_low=0.5, bandpass_high=45,
                  fir_order=200, use_notch=False, notch_freq=60, use_laplacian=True,
-                 use_csp=True, lda_shrinkage=0.0, n_features_select=5,
-                 window_len=5.0, step_len=1.0,
+                 use_csp=True, lda_shrinkage=0.0, n_features_select=10,
+                 window_len=3.0, step_len=0.25,
                  confidence_threshold=0.6, idle_distance_threshold=3.5):
         self.channels = list(channels)
         self.sampling_rate = sampling_rate
@@ -453,7 +453,7 @@ def _format_balance_stats(stats):
 # ============================================================================
 
 def run_train(edf_path, events_path, output_dir, channels=('C3', 'C4', 'Cz'),
-              window_len=5.0, step_len=1.0, idle_distance_threshold=3.5,
+              window_len=3.0, step_len=0.25, idle_distance_threshold=3.5,
               confidence_threshold=0.6, n_features_select=5, lda_shrinkage=0.0,
               balance_classes='none', seed=42):
     print("=" * 70)
@@ -538,7 +538,7 @@ def _resolve_path(path, dataset_dir):
 
 
 def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
-                     channels=('C3', 'C4', 'Cz'), window_len=5.0, step_len=1.0,
+                     channels=('C3', 'C4', 'Cz'), window_len=3.0, step_len=0.25,
                      idle_distance_threshold=3.5, confidence_threshold=0.6,
                      n_features_select=5, lda_shrinkage=0.0,
                      balance_classes='none', seed=42):
@@ -919,7 +919,7 @@ def main():
     parser.add_argument('--event-overlap-threshold', type=float, default=0.5)
     parser.add_argument('--idle-distance-threshold', type=float, default=3.5)
     parser.add_argument('--confidence-threshold', type=float, default=0.6)
-    parser.add_argument('--n-features-select', type=int, default=5)
+    parser.add_argument('--n-features-select', type=int, default=10)
     parser.add_argument('--lda-shrinkage', type=float, default=0.0)
     parser.add_argument('--balance-classes', choices=['none', 'downsample', 'class_weight'],
                          default='none', help='Sınıf dengesizliğini gidermek için yöntem '
