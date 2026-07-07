@@ -198,9 +198,21 @@ class DeployableBCIModel:
         raw_trials = [self._epoch_dict(preprocessed_continuous, w['start_idx'], w['end_idx'])
                       for w in train_windows]
         y = np.array([w['label'] for w in train_windows])
+        return self.train_from_trials(raw_trials, y)
+
+    def train_from_trials(self, raw_trials, y):
+        """
+        Tek-oturum train()'in ortak çekirdeği - ama artık DOĞRUDAN epoch
+        edilmiş raw_trials (eeg_dict listesi) + y alır, tek bir sürekli
+        kayıttaki index'lere bağımlı değil. Bu, çoklu-oturum havuzlama
+        (train_multi) için gerekli: her oturum KENDİ sürekli kaydında
+        ayrı ayrı preprocess+epoch edilir, sonra epoch SÖZLÜKLERİ
+        (artık zaman index'i taşımayan bağımsız diziler) tek listede
+        havuzlanıp buraya verilir.
+        """
+        y = np.asarray(y)
 
         # 1) CSP fit + feature selection fit + (throwaway) ilk classifier fit
-        #    - modern_bci_v2.ModernBCIPipeline.train() bunları tek çağrıda yapar
         self.pipeline.train(raw_trials, y)
 
         # 2) Şimdi CSP + feature_selector fit edildi -> seçili feature'ları
@@ -214,7 +226,6 @@ class DeployableBCIModel:
         X_sel_norm = (X_sel_raw - self.feature_mean) / self.feature_std
 
         # 4) Classifier'ı NORMALİZE edilmiş feature'larla yeniden eğit
-        #    (CSP/feature selection aynı; sadece LDA'nın girdisi normalize)
         self.pipeline.classifier.fit(X_sel_norm, y)
 
         # 5) IDLE gate referans dağılımı (command-window feature dağılımı)
@@ -224,7 +235,7 @@ class DeployableBCIModel:
         self.feature_names = get_feature_names(self.channels, self.n_csp_filters)
 
         return {
-            'n_train_windows': len(train_windows),
+            'n_train_windows': len(raw_trials),
             'n_stop': int(np.sum(y == 0)), 'n_walk': int(np.sum(y == 1)),
             'selected_feature_idx': self.pipeline.feature_selector.selected_idx.tolist(),
         }
@@ -407,6 +418,220 @@ def run_train(edf_path, events_path, output_dir, channels=('C3', 'C4', 'Cz'),
 
 
 # ============================================================================
+# MODE: train_multi (çoklu oturum havuzlama)
+# ============================================================================
+
+def _resolve_path(path, dataset_dir):
+    """CSV'deki dosya adı bağıl ise dataset_dir ile birleştir; zaten
+    çözülebiliyorsa (mutlak yol veya CWD'de mevcut) olduğu gibi kullan."""
+    if os.path.isabs(path) and os.path.exists(path):
+        return path
+    if os.path.exists(path):
+        return path
+    joined = os.path.join(dataset_dir, path)
+    if os.path.exists(joined):
+        return joined
+    return path  # var olmasa da döndür - çağıran taraf hata versin, açıkça
+
+
+def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
+                     channels=('C3', 'C4', 'Cz'), window_len=5.0, step_len=1.0,
+                     idle_distance_threshold=3.5, confidence_threshold=0.6,
+                     n_features_select=5, lda_shrinkage=0.0):
+    """
+    Birden fazla (subject, session) kaydını AYRI AYRI preprocess edip,
+    SADECE etiketli command pencerelerini havuzlayarak TEK bir
+    DeployableBCIModel eğitir.
+
+    ÖNEMLİ: Sürekli EEG sinyalleri oturumlar arasında ASLA concatenate
+    edilmez (farklı kayıtların sınırında DC offset/süreksizlik/filtfilt
+    kenar etkisi karışır). Her oturum kendi içinde preprocess edilir;
+    havuzlanan şey zaten-epoch-edilmiş (channel -> 1D array) sözlüklerdir,
+    zaman index'i taşımazlar, bu yüzden hangi oturumdan geldikleri önemsizdir.
+    """
+    import csv as csv_mod
+
+    print("=" * 70)
+    print("MODE: train_multi")
+    print("=" * 70)
+
+    with open(dataset_list_csv, newline='') as f:
+        rows = list(csv_mod.DictReader(f))
+    if not rows:
+        raise SystemExit(f"{dataset_list_csv} boş veya okunamadı")
+
+    required_cols = {'subject', 'session', 'edf', 'events'}
+    missing_cols = required_cols - set(rows[0].keys())
+    if missing_cols:
+        raise SystemExit(f"dataset-list CSV eksik kolon(lar): {missing_cols}")
+
+    print(f"[*] {len(rows)} (subject, session) satırı bulundu: {dataset_list_csv}")
+
+    pooled_trials = []
+    pooled_labels = []
+    manifest_rows = []
+    per_file_stats = []
+    fs_reference = None
+    skipped_files = []
+
+    for row in rows:
+        subject, session = row['subject'], row['session']
+        edf_path = _resolve_path(row['edf'], dataset_dir)
+        events_path = _resolve_path(row['events'], dataset_dir)
+        tag = f"{subject}/{session}"
+
+        if not os.path.exists(edf_path):
+            print(f"[!] ATLANDI [{tag}]: EDF bulunamadı -> {edf_path}")
+            skipped_files.append((tag, 'edf_missing', edf_path))
+            continue
+        if not os.path.exists(events_path):
+            print(f"[!] ATLANDI [{tag}]: events dosyası bulunamadı -> {events_path}")
+            skipped_files.append((tag, 'events_missing', events_path))
+            continue
+
+        # 1) Bu kaydı oku
+        signals, info = read_edf(edf_path)
+
+        # --- Sanity check: gerekli kanallar var mı? ---
+        missing_channels = [ch for ch in channels if ch not in signals]
+        if missing_channels:
+            print(f"[!] ATLANDI [{tag}]: eksik kanal(lar) {missing_channels}")
+            skipped_files.append((tag, f'missing_channels:{missing_channels}', edf_path))
+            continue
+
+        # --- Sanity check: sampling rate tutarlı mı? ---
+        fs = info['sampling_rate'][channels[0]]
+        if fs_reference is None:
+            fs_reference = fs
+        elif abs(fs - fs_reference) > 1e-6:
+            print(f"[!] ATLANDI [{tag}]: sampling rate uyuşmuyor "
+                  f"({fs}Hz != referans {fs_reference}Hz) - tek modelde birleştirilemez.")
+            skipped_files.append((tag, f'fs_mismatch:{fs}!={fs_reference}', edf_path))
+            continue
+
+        # 2) events oku, x5/x8 filtrele
+        try:
+            events_all = parse_events(events_path)
+        except Exception as e:
+            print(f"[!] ATLANDI [{tag}]: events okunamadı ({e})")
+            skipped_files.append((tag, f'events_parse_error:{e}', events_path))
+            continue
+        events = [(o, d, t) for o, d, t in events_all if t in COMMAND_LABEL_MAP]
+        if not events:
+            print(f"[!] ATLANDI [{tag}]: kullanılabilir x5/x8 event yok")
+            skipped_files.append((tag, 'no_usable_events', events_path))
+            continue
+
+        # 3) BU KAYDI KENDİ İÇİNDE preprocess et (oturumlar arası concat YOK)
+        temp_model = DeployableBCIModel(
+            channels=channels, sampling_rate=fs, window_len=window_len, step_len=step_len,
+            idle_distance_threshold=idle_distance_threshold,
+            confidence_threshold=confidence_threshold,
+            n_features_select=n_features_select, lda_shrinkage=lda_shrinkage,
+        )
+        preprocessed = temp_model.preprocess_continuous(signals)
+
+        # 4) Bu kayıttan event-ankorlu eğitim pencerelerini çıkar
+        file_windows = extract_command_training_windows(events, fs, window_len=window_len)
+        n_stop_file = sum(1 for w in file_windows if w['label'] == 0)
+        n_walk_file = sum(1 for w in file_windows if w['label'] == 1)
+        print(f"[+] [{tag}] {len(file_windows)} pencere (STOP={n_stop_file}, WALK={n_walk_file})")
+        per_file_stats.append({
+            'subject': subject, 'session': session, 'edf': edf_path,
+            'n_windows': len(file_windows), 'n_stop': n_stop_file, 'n_walk': n_walk_file,
+        })
+
+        if n_stop_file == 0 or n_walk_file == 0:
+            print(f"[!] UYARI [{tag}]: bir sınıf tamamen yok (STOP={n_stop_file}, WALK={n_walk_file}) "
+                  f"- bu dosya tek başına ayrım öğretemez, sadece havuza katkı sağlar.")
+
+        # 5) Bu oturumun pencerelerini epoch'la ve HAVUZA ekle (provenance ile)
+        for w in file_windows:
+            epoch = temp_model._epoch_dict(preprocessed, w['start_idx'], w['end_idx'])
+            pooled_trials.append(epoch)
+            pooled_labels.append(w['label'])
+            manifest_rows.append({
+                'subject': subject, 'session': session, 'edf': edf_path,
+                'start_idx': w['start_idx'], 'end_idx': w['end_idx'],
+                'start_time': round(w['start_idx'] / fs, 3), 'end_time': round(w['end_idx'] / fs, 3),
+                'label': LABEL_NAMES[w['label']],
+            })
+
+    if fs_reference is None or len(pooled_trials) == 0:
+        raise SystemExit("Hiçbir dosya kullanılamadı - train_multi için havuzlanacak pencere yok. "
+                          "Yukarıdaki [!] ATLANDI satırlarına bakın.")
+
+    y_pooled = np.array(pooled_labels)
+    n_stop_total = int(np.sum(y_pooled == 0))
+    n_walk_total = int(np.sum(y_pooled == 1))
+    print(f"\n[*] Toplam havuzlanan eğitim penceresi: {len(pooled_trials)} "
+          f"(STOP={n_stop_total}, WALK={n_walk_total}) - {len(per_file_stats)} dosyadan, "
+          f"{len(skipped_files)} dosya atlandı")
+
+    # --- Sanity check: ciddi class imbalance uyarısı ---
+    imbalance_ratio = max(n_stop_total, n_walk_total) / max(min(n_stop_total, n_walk_total), 1)
+    if imbalance_ratio >= 3.0:
+        print(f"[!] UYARI: ciddi sınıf dengesizliği - oran {imbalance_ratio:.1f}:1 "
+              f"(STOP={n_stop_total}, WALK={n_walk_total}). Model çoğunluk sınıfa yatkın olabilir.")
+
+    # 6) TEK model, havuzlanmış trial'larla eğitilir
+    model = DeployableBCIModel(
+        channels=channels, sampling_rate=fs_reference, window_len=window_len, step_len=step_len,
+        idle_distance_threshold=idle_distance_threshold,
+        confidence_threshold=confidence_threshold,
+        n_features_select=n_features_select, lda_shrinkage=lda_shrinkage,
+    )
+    stats = model.train_from_trials(pooled_trials, y_pooled)
+    print(f"\n[+] Havuzlanmış eğitim tamamlandı: STOP={stats['n_stop']}, WALK={stats['n_walk']}")
+    print(f"[+] Seçili feature indeksleri: {stats['selected_feature_idx']}")
+
+    # 7) Kaydet
+    info_saved = model.save(output_dir)
+
+    with open(os.path.join(output_dir, 'train_manifest_resolved.csv'), 'w', newline='') as f:
+        writer = csv_mod.DictWriter(f, fieldnames=['subject', 'session', 'edf', 'start_idx',
+                                                     'end_idx', 'start_time', 'end_time', 'label'])
+        writer.writeheader()
+        writer.writerows(manifest_rows)
+
+    with open(os.path.join(output_dir, 'training_summary.txt'), 'w') as f:
+        f.write("BCI Walk/Stop Model - MULTI-SESSION Training Summary\n")
+        f.write("=" * 55 + "\n")
+        f.write(f"Dataset list: {dataset_list_csv}\n")
+        f.write(f"Files used: {len(per_file_stats)}, skipped: {len(skipped_files)}\n\n")
+        for s in per_file_stats:
+            f.write(f"  [{s['subject']}/{s['session']}] {s['edf']}: "
+                     f"{s['n_windows']} windows (STOP={s['n_stop']}, WALK={s['n_walk']})\n")
+        if skipped_files:
+            f.write("\nSkipped files:\n")
+            for tag, reason, path in skipped_files:
+                f.write(f"  [{tag}] {reason}: {path}\n")
+        f.write(f"\nTotal pooled training windows: {len(pooled_trials)} "
+                f"(STOP={n_stop_total}, WALK={n_walk_total})\n")
+        f.write(f"Class imbalance ratio: {imbalance_ratio:.2f}:1\n")
+        f.write(f"Channels: {channels}\n")
+        f.write(f"Sampling rate: {fs_reference}\n")
+        f.write(f"CSP: {info_saved['use_csp']}, n_features_select: {info_saved['n_features_select']}, "
+                f"lda_shrinkage: {info_saved['lda_shrinkage']}\n")
+        f.write(f"idle_distance_threshold: {idle_distance_threshold}, "
+                f"confidence_threshold: {confidence_threshold}\n\n")
+        f.write("IMPORTANT: Continuous EEG signals were NEVER concatenated across sessions.\n")
+        f.write("Each recording was preprocessed independently; only already-epoched\n")
+        f.write("(labeled command-window) trials were pooled before training.\n\n")
+        f.write("BILIMSEL DURUSTLUK: Bu model onceden egitilmis bir modelle EEG'den\n")
+        f.write("Walk/Stop komut periyotlarini tahmin eder. Saf beyin-ici yurume\n")
+        f.write("niyetinin kanitlanmis decode'u degildir. Cok-oturum havuzlama modelin\n")
+        f.write("BIR oturuma asiri uyum saglama riskini azaltmaya calisir, ama bu\n")
+        f.write("validate_timeline sonuclariyla ayrica dogrulanmadan capraz-denek/\n")
+        f.write("oturum genelleme iddia edilemez.\n")
+
+    print(f"\n[+] Model kaydedildi: {output_dir}/")
+    print(f"[+] Provenance: {output_dir}/train_manifest_resolved.csv "
+          f"({len(manifest_rows)} satır, her eğitim penceresi için subject/session)")
+    return model, per_file_stats, skipped_files
+
+
+# ============================================================================
 # MODE: validate_timeline
 # ============================================================================
 
@@ -487,6 +712,28 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
     stop_recall = per_class['STOP']['recall']
     idle_fp_rate = (cm[:, 2].sum() - cm[2, 2]) / max(total - cm[2, :].sum(), 1)
 
+    # --- accuracy = correct STOP/WALK predictions over NON-IDLE ground-truth
+    #     windows only. Bu görev oturumlarında gerçek IDLE ground-truth
+    #     genelde yok/az olduğundan, genel "accuracy" STOP+WALK ground-truth
+    #     kümesine göre hesaplanır - IDLE ground-truth örnekleri (varsa)
+    #     paydaya girmez. ---
+    non_idle_mask = (y_true == 0) | (y_true == 1)
+    n_non_idle = int(non_idle_mask.sum())
+    if n_non_idle > 0:
+        deployment_accuracy_non_idle = float(
+            np.mean(y_pred[non_idle_mask] == y_true[non_idle_mask])
+        )
+    else:
+        deployment_accuracy_non_idle = float('nan')
+
+    # balanced_accuracy = mean(STOP recall, WALK recall) - sınıf
+    # dengesizliğinden (STOP pencere sayısı WALK'tan fazla olabilir)
+    # etkilenmeyen özet.
+    if not np.isnan(walk_recall) and not np.isnan(stop_recall):
+        balanced_accuracy = float((walk_recall + stop_recall) / 2)
+    else:
+        balanced_accuracy = float('nan')
+
     dominant_frac = max(pred_counts.values()) / total
     collapse = dominant_frac > 0.90 or pred_counts['WALK'] == 0
 
@@ -496,6 +743,9 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
         'per_class': per_class,
         'walk_recall': walk_recall,
         'stop_recall': stop_recall,
+        'deployment_accuracy_non_idle': deployment_accuracy_non_idle,
+        'balanced_accuracy': balanced_accuracy,
+        'n_non_idle_ground_truth_windows': n_non_idle,
         'idle_false_positive_rate': idle_fp_rate,
         'collapse_warning': bool(collapse),
         'dominant_prediction_fraction': dominant_frac,
@@ -515,6 +765,11 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
     print(f"\n[+] Prediction dağılımı: {pred_counts}")
     print(f"[+] WALK recall: {walk_recall:.2%}" if not np.isnan(walk_recall) else "[+] WALK recall: N/A")
     print(f"[+] STOP recall: {stop_recall:.2%}" if not np.isnan(stop_recall) else "[+] STOP recall: N/A")
+    print(f"[+] Deployment accuracy (non-IDLE ground truth, n={n_non_idle}): "
+          f"{deployment_accuracy_non_idle:.2%}" if not np.isnan(deployment_accuracy_non_idle)
+          else "[+] Deployment accuracy (non-IDLE): N/A")
+    print(f"[+] Balanced accuracy (mean of STOP/WALK recall): "
+          f"{balanced_accuracy:.2%}" if not np.isnan(balanced_accuracy) else "[+] Balanced accuracy: N/A")
     print(f"[+] IDLE false positive rate: {idle_fp_rate:.2%}")
     print(f"\nConfusion matrix (satır=gerçek, sütun=tahmin):")
     print(f"{'':>12}{'pred_STOP':>12}{'pred_WALK':>12}{'pred_IDLE':>12}")
@@ -539,11 +794,13 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
 
 def main():
     parser = argparse.ArgumentParser(description="BCI Walk/Stop pipeline v3")
-    parser.add_argument('--mode', required=True, choices=['train', 'validate_timeline', 'predict'])
-    parser.add_argument('--edf', required=True)
+    parser.add_argument('--mode', required=True, choices=['train', 'train_multi', 'validate_timeline', 'predict'])
+    parser.add_argument('--edf', default=None, help='(train/validate_timeline/predict)')
     parser.add_argument('--events', default=None)
     parser.add_argument('--model', default=None, help='trained_model dizini (validate_timeline/predict için)')
     parser.add_argument('--output-dir', required=True)
+    parser.add_argument('--dataset-list', default=None, help='(train_multi) subject,session,edf,events CSV')
+    parser.add_argument('--dataset-dir', default='.', help='(train_multi) CSV\'deki bağıl yollar için taban dizin')
     parser.add_argument('--event-overlap-threshold', type=float, default=0.5)
     parser.add_argument('--idle-distance-threshold', type=float, default=3.5)
     parser.add_argument('--confidence-threshold', type=float, default=0.6)
@@ -554,17 +811,26 @@ def main():
     logger.setLevel(logging.WARNING)
 
     if args.mode == 'train':
-        if not args.events:
-            raise SystemExit("--events gerekli (train modu)")
+        if not args.edf or not args.events:
+            raise SystemExit("--edf ve --events gerekli (train modu)")
         run_train(args.edf, args.events, args.output_dir,
                    idle_distance_threshold=args.idle_distance_threshold,
                    confidence_threshold=args.confidence_threshold,
                    n_features_select=args.n_features_select,
                    lda_shrinkage=args.lda_shrinkage)
 
+    elif args.mode == 'train_multi':
+        if not args.dataset_list:
+            raise SystemExit("--dataset-list gerekli (train_multi modu)")
+        run_train_multi(args.dataset_list, args.output_dir, dataset_dir=args.dataset_dir,
+                         idle_distance_threshold=args.idle_distance_threshold,
+                         confidence_threshold=args.confidence_threshold,
+                         n_features_select=args.n_features_select,
+                         lda_shrinkage=args.lda_shrinkage)
+
     elif args.mode == 'validate_timeline':
-        if not args.events or not args.model:
-            raise SystemExit("--events ve --model gerekli (validate_timeline modu)")
+        if not args.edf or not args.events or not args.model:
+            raise SystemExit("--edf, --events ve --model gerekli (validate_timeline modu)")
         run_validate_timeline(args.edf, args.events, args.model, args.output_dir,
                                overlap_threshold=args.event_overlap_threshold)
 
