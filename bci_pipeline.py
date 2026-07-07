@@ -1,7 +1,7 @@
 """
-bci_pipeline_v3.py
-==================
-EEG Walk/Stop BCI - v3
+bci_pipeline_v2.6.py
+====================
+EEG Walk/Stop BCI - v2.6
 
 Brief'teki kritik tasarım hatası düzeltmesi:
   Training verisi (etiketli event pencereleri) != Prediction verisi (tüm
@@ -63,6 +63,45 @@ def get_feature_names(channels, n_csp_filters=0):
     for i in range(n_csp_filters):
         names.append(f"CSP_logvar_{i}")
     return names
+
+
+def apply_temporal_smoothing(raw_labels, window_size):
+    """
+    Deterministic, neutral temporal smoothing.
+
+    raw_labels: list/array of ints (0=STOP, 1=WALK, 2=IDLE)
+    window_size: 1, 3, or 5. 1 means no smoothing.
+
+    Centered majority vote is applied. If there is a tie, the current
+    window's raw prediction is preserved. There is no WALK priority.
+    """
+    raw_labels = [int(x) for x in raw_labels]
+    n = len(raw_labels)
+    if window_size <= 1 or n == 0:
+        return list(raw_labels)
+
+    half = window_size // 2
+    smoothed_prediction = []
+
+    for i in range(n):
+        start = max(0, i - half)
+        end = min(n, i + half + 1)
+        window = raw_labels[start:end]
+
+        counts = {}
+        for lbl in window:
+            counts[lbl] = counts.get(lbl, 0) + 1
+
+        max_count = max(counts.values())
+        candidates = [lbl for lbl, count in counts.items() if count == max_count]
+
+        if len(candidates) == 1:
+            smoothed_prediction.append(candidates[0])
+        else:
+            # Tie -> keep raw prediction. No WALK priority.
+            smoothed_prediction.append(raw_labels[i])
+
+    return smoothed_prediction
 
 
 # ============================================================================
@@ -987,40 +1026,71 @@ def _predict_full_record(edf_path, model):
 
 def _write_prediction_outputs(rows, meta, output_dir,
                               timeline_csv_name='predicted_timeline.csv',
-                              summary_json_name='prediction_summary.json'):
-    """Etiketsiz prediction CSV + özet JSON + collapse raporu yazar."""
+                              summary_json_name='prediction_summary.json',
+                              smoothing_window=3):
+    """Etiketsiz prediction CSV + özet JSON + collapse raporu yazar.
+
+    Accuracy hesaplamaz. CSV hem raw hem smoothed prediction içerir.
+    raw_predicted_label = IDLE gate + confidence threshold sonrası ham pencere etiketi.
+    smoothed_predicted_label = temporal smoothing sonrası etiket.
+    """
     import csv
     os.makedirs(output_dir, exist_ok=True)
+
+    raw_labels_int = [int(r['predicted']) for r in rows]
+    smoothed_prediction = apply_temporal_smoothing(raw_labels_int, smoothing_window)
 
     timeline_path = os.path.join(output_dir, timeline_csv_name)
     with open(timeline_path, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['start_time', 'end_time', 'predicted_label',
-                         'confidence', 'z_distance', 'raw_prediction'])
-        for r in rows:
+        writer.writerow([
+            'start_time', 'end_time',
+            'raw_predicted_label', 'raw_confidence', 'raw_z_distance',
+            'raw_classifier_prediction',
+            'smoothed_predicted_label',
+        ])
+        for idx, r in enumerate(rows):
             writer.writerow([
                 f"{r['start_time']:.2f}",
                 f"{r['end_time']:.2f}",
-                LABEL_NAMES[r['predicted']],
+                LABEL_NAMES[raw_labels_int[idx]],
                 '' if r['confidence'] is None else f"{r['confidence']:.4f}",
                 f"{r['z_distance']:.3f}",
                 '' if r['raw_prediction'] is None else LABEL_NAMES[r['raw_prediction']],
+                LABEL_NAMES[smoothed_prediction[idx]],
             ])
 
-    y_pred = np.asarray([r['predicted'] for r in rows])
-    pred_counts = _prediction_counts(y_pred)
-    total = len(y_pred)
-    dominant_frac = (max(pred_counts.values()) / total) if total else float('nan')
-    collapse = bool(total and (dominant_frac > 0.90 or pred_counts['WALK'] == 0))
+    y_raw = np.asarray(raw_labels_int)
+    y_smoothed = np.asarray(smoothed_prediction)
+    raw_counts = _prediction_counts(y_raw)
+    smoothed_counts = _prediction_counts(y_smoothed)
+    total = len(y_raw)
+
+    dominant_frac_raw = (max(raw_counts.values()) / total) if total else float('nan')
+    dominant_frac_smoothed = (max(smoothed_counts.values()) / total) if total else float('nan')
+    collapse_raw = bool(total and (dominant_frac_raw > 0.90 or raw_counts['WALK'] == 0))
+    collapse_smoothed = bool(total and (dominant_frac_smoothed > 0.90 or smoothed_counts['WALK'] == 0))
 
     summary = {
         **meta,
         'validation_available': False,
         'accuracy_computed': False,
-        'reason_accuracy_not_computed': 'events file was not provided or could not be used',
-        'prediction_counts': pred_counts,
-        'dominant_prediction_fraction': dominant_frac,
-        'collapse_warning': collapse,
+        'reason_accuracy_not_computed': 'No ground-truth events were provided. Accuracy cannot be computed.',
+        'smoothing_window': int(smoothing_window),
+        'raw': {
+            'prediction_counts': raw_counts,
+            'dominant_prediction_fraction': dominant_frac_raw,
+            'collapse_warning': collapse_raw,
+        },
+        'smoothed': {
+            'prediction_counts': smoothed_counts,
+            'dominant_prediction_fraction': dominant_frac_smoothed,
+            'collapse_warning': collapse_smoothed,
+        },
+        # Backward-compatible aliases: use smoothed as the deployment-facing stream.
+        'prediction_counts': smoothed_counts,
+        'dominant_prediction_fraction': dominant_frac_smoothed,
+        'collapse_warning': collapse_smoothed,
         'outputs': {
             'timeline_csv': timeline_path,
             'summary_json': os.path.join(output_dir, summary_json_name),
@@ -1035,22 +1105,30 @@ def _write_prediction_outputs(rows, meta, output_dir,
     collapse_path = os.path.join(output_dir, 'collapse_report.txt')
     with open(collapse_path, 'w') as f:
         f.write("COLLAPSE CHECK - UNLABELED PREDICTION\n" + "=" * 45 + "\n")
-        f.write("No events/ground truth available; accuracy was NOT computed.\n")
+        f.write("No ground-truth events were provided.\n")
+        f.write("Raw and smoothed predictions saved.\n")
+        f.write("Accuracy cannot be computed.\n")
+        f.write(f"Smoothing window: {smoothing_window}\n")
         f.write(f"Total windows: {total}\n")
-        f.write(f"Prediction counts: {pred_counts}\n")
+        f.write(f"RAW prediction counts: {raw_counts}\n")
+        f.write(f"SMOOTHED prediction counts: {smoothed_counts}\n")
         if total:
-            f.write(f"Dominant prediction fraction: {dominant_frac:.2%}\n")
+            f.write(f"RAW dominant prediction fraction: {dominant_frac_raw:.2%}\n")
+            f.write(f"SMOOTHED dominant prediction fraction: {dominant_frac_smoothed:.2%}\n")
         else:
             f.write("Dominant prediction fraction: N/A\n")
-        f.write(f"WALK count: {pred_counts.get('WALK', 0)}\n")
-        f.write(f"COLLAPSE WARNING: {'YES' if collapse else 'no'}\n")
+        f.write(f"RAW WALK count: {raw_counts.get('WALK', 0)}\n")
+        f.write(f"SMOOTHED WALK count: {smoothed_counts.get('WALK', 0)}\n")
+        f.write(f"RAW COLLAPSE WARNING: {'YES' if collapse_raw else 'no'}\n")
+        f.write(f"SMOOTHED COLLAPSE WARNING: {'YES' if collapse_smoothed else 'no'}\n")
 
     return summary
 
 
 def run_unlabeled_prediction(edf_path, model_dir, output_dir,
                              timeline_csv_name='predicted_timeline.csv',
-                             summary_json_name='prediction_summary.json'):
+                             summary_json_name='prediction_summary.json',
+                             smoothing_window=3):
     print("=" * 70)
     print("MODE: predict / unlabeled timeline")
     print("=" * 70)
@@ -1059,96 +1137,41 @@ def run_unlabeled_prediction(edf_path, model_dir, output_dir,
     rows, meta = _predict_full_record(edf_path, model)
     print(f"[*] {len(rows)} sliding window oluşturuldu "
           f"(window={model.window_len}s, step={model.step_len}s, tam kayıt üzerinde)")
+    print(f"[*] Temporal smoothing window: {smoothing_window} "
+          f"({'no smoothing' if smoothing_window == 1 else 'centered majority vote'})")
 
     summary = _write_prediction_outputs(
         rows, meta, output_dir,
         timeline_csv_name=timeline_csv_name,
         summary_json_name=summary_json_name,
+        smoothing_window=smoothing_window,
     )
 
-    print(f"\n[+] Prediction dağılımı: {summary['prediction_counts']}")
-    print("[+] Events/ground truth yok: accuracy, recall, confusion matrix hesaplanmadı.")
-    if summary['collapse_warning']:
-        print(f"[!!!] COLLAPSE WARNING: dominant prediction = "
-              f"{summary['dominant_prediction_fraction']:.1%} veya WALK count = 0.")
+    print(f"\n[+] RAW prediction dağılımı: {summary['raw']['prediction_counts']}")
+    print(f"[+] SMOOTHED prediction dağılımı: {summary['smoothed']['prediction_counts']}")
+    print("[+] No ground-truth events were provided.")
+    print("[+] Raw and smoothed predictions saved.")
+    print("[+] Accuracy cannot be computed.")
+    if summary['smoothed']['collapse_warning']:
+        print(f"[!!!] SMOOTHED COLLAPSE WARNING: dominant prediction = "
+              f"{summary['smoothed']['dominant_prediction_fraction']:.1%} veya WALK count = 0.")
     else:
-        print(f"[+] Collapse yok - dominant prediction "
-              f"{summary['dominant_prediction_fraction']:.1%} (<90%), WALK count>0.")
+        print(f"[+] Collapse yok - smoothed dominant prediction "
+              f"{summary['smoothed']['dominant_prediction_fraction']:.1%} (<90%), WALK count>0.")
     print(f"\n[+] Çıktılar: {output_dir}/{timeline_csv_name}, "
           f"{summary_json_name}, collapse_report.txt")
     return summary
 
 
-def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
-                          overlap_threshold=0.5):
-    print("=" * 70)
-    print("MODE: validate_timeline")
-    print("=" * 70)
-
-    # events opsiyonel: yoksa validate değil, sadece etiketsiz prediction yapılır.
-    if not events_path or not os.path.exists(events_path):
-        if not events_path:
-            print("[!] --events verilmedi. Ground truth olmadığı için sadece prediction yapılacak.")
-        else:
-            print(f"[!] Events dosyası bulunamadı: {events_path}")
-            print("[!] Ground truth olmadığı için sadece prediction yapılacak.")
-        return run_unlabeled_prediction(
-            edf_path, model_dir, output_dir,
-            timeline_csv_name='predicted_timeline.csv',
-            summary_json_name='prediction_summary.json',
-        )
-
-    model = DeployableBCIModel.load(model_dir)
-    rows_pred, meta = _predict_full_record(edf_path, model)
-    events_all = parse_events(events_path)
-
-    fs = model.sampling_rate
-    # _predict_full_record ile aynı sliding window'ları yeniden kuruyoruz;
-    # prediction row'larıyla bire bir aynı sıradalar.
-    signal_len = int(meta['signal_len_samples'])
-    windows = build_sliding_windows(signal_len, fs, model.window_len, model.step_len)
-    print(f"[*] {len(windows)} sliding window oluşturuldu "
-          f"(window={model.window_len}s, step={model.step_len}s, tam kayıt üzerinde)")
-
-    gt_labels = label_windows_from_events(windows, events_all, overlap_threshold)
-
-    rows = []
-    for pred_row, gt in zip(rows_pred, gt_labels):
-        rows.append({
-            'start_time': pred_row['start_time'],
-            'end_time': pred_row['end_time'],
-            'ground_truth': int(gt),
-            'predicted': int(pred_row['predicted']),
-            'confidence': pred_row['confidence'],
-            'z_distance': pred_row['z_distance'],
-        })
-
-    os.makedirs(output_dir, exist_ok=True)
-
-    import csv
-    with open(os.path.join(output_dir, 'validated_timeline.csv'), 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(['start_time', 'end_time', 'ground_truth_label', 'predicted_label',
-                         'confidence', 'z_distance'])
-        for r in rows:
-            writer.writerow([f"{r['start_time']:.2f}", f"{r['end_time']:.2f}",
-                             LABEL_NAMES[r['ground_truth']], LABEL_NAMES[r['predicted']],
-                             '' if r['confidence'] is None else f"{r['confidence']:.4f}",
-                             f"{r['z_distance']:.3f}"])
-
-    y_true = np.array([r['ground_truth'] for r in rows])
-    y_pred = np.array([r['predicted'] for r in rows])
-
+def _compute_timeline_metrics(y_true, y_pred):
+    """3-class confusion + STOP/WALK deployment metrics. sklearn yok."""
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
     classes = [0, 1, 2]
+
     cm = np.zeros((3, 3), dtype=int)
     for t, p in zip(y_true, y_pred):
-        cm[t, p] += 1
-
-    with open(os.path.join(output_dir, 'timeline_confusion_matrix.csv'), 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([''] + [f"pred_{LABEL_NAMES[c]}" for c in classes])
-        for i, c in enumerate(classes):
-            writer.writerow([f"true_{LABEL_NAMES[c]}"] + cm[i].tolist())
+        cm[int(t), int(p)] += 1
 
     per_class = {}
     for c in classes:
@@ -1161,8 +1184,10 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
               if (precision + recall) > 0 and not np.isnan(precision) and not np.isnan(recall)
               else float('nan'))
         per_class[LABEL_NAMES[c]] = {
-            'precision': precision, 'recall': recall, 'f1': f1,
-            'support': int(cm[c, :].sum())
+            'precision': precision,
+            'recall': recall,
+            'f1': f1,
+            'support': int(cm[c, :].sum()),
         }
 
     pred_counts = _prediction_counts(y_pred)
@@ -1186,11 +1211,7 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
     dominant_frac = max(pred_counts.values()) / total if total else float('nan')
     collapse = bool(total and (dominant_frac > 0.90 or pred_counts['WALK'] == 0))
 
-    metrics = {
-        **meta,
-        'events': events_path,
-        'validation_available': True,
-        'accuracy_computed': True,
+    return {
         'total_windows': total,
         'prediction_counts': pred_counts,
         'per_class': per_class,
@@ -1202,39 +1223,182 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
         'idle_false_positive_rate': idle_fp_rate,
         'collapse_warning': collapse,
         'dominant_prediction_fraction': dominant_frac,
+        'confusion_matrix': cm,
+    }
+
+
+def _write_confusion_matrix_csv(path, cm):
+    import csv
+    classes = [0, 1, 2]
+    with open(path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([''] + [f"pred_{LABEL_NAMES[c]}" for c in classes])
+        for i, c in enumerate(classes):
+            writer.writerow([f"true_{LABEL_NAMES[c]}"] + cm[i].tolist())
+
+
+def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
+                          overlap_threshold=0.5, smoothing_window=3):
+    print("=" * 70)
+    print("MODE: validate_timeline")
+    print("=" * 70)
+
+    # events opsiyonel: yoksa validate değil, sadece etiketsiz prediction yapılır.
+    if not events_path or not os.path.exists(events_path):
+        if not events_path:
+            print("[!] --events verilmedi. Ground truth olmadığı için sadece prediction yapılacak.")
+        else:
+            print(f"[!] Events dosyası bulunamadı: {events_path}")
+            print("[!] Ground truth olmadığı için sadece prediction yapılacak.")
+        return run_unlabeled_prediction(
+            edf_path, model_dir, output_dir,
+            timeline_csv_name='predicted_timeline.csv',
+            summary_json_name='prediction_summary.json',
+            smoothing_window=smoothing_window,
+        )
+
+    model = DeployableBCIModel.load(model_dir)
+    rows_pred, meta = _predict_full_record(edf_path, model)
+    events_all = parse_events(events_path)
+
+    fs = model.sampling_rate
+    # _predict_full_record ile aynı sliding window'ları yeniden kuruyoruz;
+    # prediction row'larıyla bire bir aynı sıradalar.
+    signal_len = int(meta['signal_len_samples'])
+    windows = build_sliding_windows(signal_len, fs, model.window_len, model.step_len)
+    print(f"[*] {len(windows)} sliding window oluşturuldu "
+          f"(window={model.window_len}s, step={model.step_len}s, tam kayıt üzerinde)")
+    print(f"[*] Temporal smoothing window: {smoothing_window} "
+          f"({'no smoothing' if smoothing_window == 1 else 'centered majority vote'})")
+
+    gt_labels = label_windows_from_events(windows, events_all, overlap_threshold)
+    raw_labels_int = [int(r['predicted']) for r in rows_pred]
+    smoothed_prediction = apply_temporal_smoothing(raw_labels_int, smoothing_window)
+
+    rows = []
+    for idx, (pred_row, gt) in enumerate(zip(rows_pred, gt_labels)):
+        rows.append({
+            'start_time': pred_row['start_time'],
+            'end_time': pred_row['end_time'],
+            'ground_truth': int(gt),
+            'raw_predicted': raw_labels_int[idx],
+            'raw_confidence': pred_row['confidence'],
+            'raw_z_distance': pred_row['z_distance'],
+            'raw_classifier_prediction': pred_row['raw_prediction'],
+            'smoothed_prediction': int(smoothed_prediction[idx]),
+        })
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    import csv
+    with open(os.path.join(output_dir, 'validated_timeline.csv'), 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            'window_index', 'start_time', 'end_time', 'ground_truth_label',
+            'raw_predicted_label', 'raw_confidence', 'raw_z_distance',
+            'raw_classifier_prediction', 'smoothed_predicted_label',
+        ])
+        for idx, r in enumerate(rows):
+            writer.writerow([
+                idx,
+                f"{r['start_time']:.2f}",
+                f"{r['end_time']:.2f}",
+                LABEL_NAMES[r['ground_truth']],
+                LABEL_NAMES[r['raw_predicted']],
+                '' if r['raw_confidence'] is None else f"{r['raw_confidence']:.4f}",
+                f"{r['raw_z_distance']:.3f}",
+                '' if r['raw_classifier_prediction'] is None else LABEL_NAMES[r['raw_classifier_prediction']],
+                LABEL_NAMES[r['smoothed_prediction']],
+            ])
+
+    y_true = np.asarray([r['ground_truth'] for r in rows])
+    y_raw = np.asarray([r['raw_predicted'] for r in rows])
+    y_smoothed = np.asarray([r['smoothed_prediction'] for r in rows])
+
+    raw_metrics = _compute_timeline_metrics(y_true, y_raw)
+    smoothed_metrics = _compute_timeline_metrics(y_true, y_smoothed)
+
+    cm_raw = raw_metrics.pop('confusion_matrix')
+    cm_smoothed = smoothed_metrics.pop('confusion_matrix')
+
+    _write_confusion_matrix_csv(os.path.join(output_dir, 'timeline_confusion_matrix_raw.csv'), cm_raw)
+    _write_confusion_matrix_csv(os.path.join(output_dir, 'timeline_confusion_matrix_smoothed.csv'), cm_smoothed)
+    # Backward-compatible alias: deployment-facing stream is smoothed.
+    _write_confusion_matrix_csv(os.path.join(output_dir, 'timeline_confusion_matrix.csv'), cm_smoothed)
+
+    total = int(len(y_true))
+    metrics = {
+        **meta,
+        'events': events_path,
+        'validation_available': True,
+        'accuracy_computed': True,
+        'smoothing_window': int(smoothing_window),
+        'total_windows': total,
+        'raw': raw_metrics,
+        'smoothed': smoothed_metrics,
+        # Backward-compatible aliases point to smoothed/deployment stream.
+        'prediction_counts': smoothed_metrics['prediction_counts'],
+        'per_class': smoothed_metrics['per_class'],
+        'walk_recall': smoothed_metrics['walk_recall'],
+        'stop_recall': smoothed_metrics['stop_recall'],
+        'deployment_accuracy_non_idle': smoothed_metrics['deployment_accuracy_non_idle'],
+        'balanced_accuracy': smoothed_metrics['balanced_accuracy'],
+        'n_non_idle_ground_truth_windows': smoothed_metrics['n_non_idle_ground_truth_windows'],
+        'idle_false_positive_rate': smoothed_metrics['idle_false_positive_rate'],
+        'collapse_warning': smoothed_metrics['collapse_warning'],
+        'dominant_prediction_fraction': smoothed_metrics['dominant_prediction_fraction'],
     }
     with open(os.path.join(output_dir, 'timeline_metrics.json'), 'w') as f:
         json.dump(metrics, f, indent=2, default=_json_default)
 
     with open(os.path.join(output_dir, 'collapse_report.txt'), 'w') as f:
         f.write("COLLAPSE CHECK\n" + "=" * 40 + "\n")
+        f.write(f"Smoothing window: {smoothing_window}\n")
         f.write(f"Total windows: {total}\n")
-        f.write(f"Prediction counts: {pred_counts}\n")
-        f.write(f"Dominant prediction fraction: {dominant_frac:.2%}\n")
-        f.write(f"WALK count: {pred_counts['WALK']}\n")
-        f.write(f"COLLAPSE WARNING: {'YES' if collapse else 'no'}\n")
+        f.write(f"RAW prediction counts: {raw_metrics['prediction_counts']}\n")
+        f.write(f"SMOOTHED prediction counts: {smoothed_metrics['prediction_counts']}\n")
+        f.write(f"RAW dominant prediction fraction: {raw_metrics['dominant_prediction_fraction']:.2%}\n")
+        f.write(f"SMOOTHED dominant prediction fraction: {smoothed_metrics['dominant_prediction_fraction']:.2%}\n")
+        f.write(f"RAW WALK count: {raw_metrics['prediction_counts']['WALK']}\n")
+        f.write(f"SMOOTHED WALK count: {smoothed_metrics['prediction_counts']['WALK']}\n")
+        f.write(f"RAW COLLAPSE WARNING: {'YES' if raw_metrics['collapse_warning'] else 'no'}\n")
+        f.write(f"SMOOTHED COLLAPSE WARNING: {'YES' if smoothed_metrics['collapse_warning'] else 'no'}\n")
+        f.write("\nMETRICS\n" + "-" * 40 + "\n")
+        f.write(f"[RAW] Accuracy non-IDLE: {raw_metrics['deployment_accuracy_non_idle']:.4f}\n")
+        f.write(f"[RAW] Balanced accuracy: {raw_metrics['balanced_accuracy']:.4f}\n")
+        f.write(f"[SMOOTHED] Accuracy non-IDLE: {smoothed_metrics['deployment_accuracy_non_idle']:.4f}\n")
+        f.write(f"[SMOOTHED] Balanced accuracy: {smoothed_metrics['balanced_accuracy']:.4f}\n")
 
-    print(f"\n[+] Prediction dağılımı: {pred_counts}")
-    print(f"[+] WALK recall: {walk_recall:.2%}" if not np.isnan(walk_recall) else "[+] WALK recall: N/A")
-    print(f"[+] STOP recall: {stop_recall:.2%}" if not np.isnan(stop_recall) else "[+] STOP recall: N/A")
-    print(f"[+] Deployment accuracy (non-IDLE ground truth, n={n_non_idle}): "
-          f"{deployment_accuracy_non_idle:.2%}" if not np.isnan(deployment_accuracy_non_idle)
-          else "[+] Deployment accuracy (non-IDLE): N/A")
-    print(f"[+] Balanced accuracy (mean of STOP/WALK recall): "
-          f"{balanced_accuracy:.2%}" if not np.isnan(balanced_accuracy) else "[+] Balanced accuracy: N/A")
-    print(f"[+] IDLE false positive rate: {idle_fp_rate:.2%}")
-    print(f"\nConfusion matrix (satır=gerçek, sütun=tahmin):")
+    print(f"\n[+] RAW prediction dağılımı: {raw_metrics['prediction_counts']}")
+    print(f"[+] SMOOTHED prediction dağılımı: {smoothed_metrics['prediction_counts']}")
+    print(f"[SMOOTHED] Accuracy: {smoothed_metrics['deployment_accuracy_non_idle']:.2%}  "
+          f"Balanced: {smoothed_metrics['balanced_accuracy']:.2%}")
+    print(f"[RAW]      Accuracy: {raw_metrics['deployment_accuracy_non_idle']:.2%}  "
+          f"Balanced: {raw_metrics['balanced_accuracy']:.2%}")
+    print(f"[+] SMOOTHED WALK recall: {smoothed_metrics['walk_recall']:.2%}" if not np.isnan(smoothed_metrics['walk_recall']) else "[+] SMOOTHED WALK recall: N/A")
+    print(f"[+] SMOOTHED STOP recall: {smoothed_metrics['stop_recall']:.2%}" if not np.isnan(smoothed_metrics['stop_recall']) else "[+] SMOOTHED STOP recall: N/A")
+    print(f"[+] SMOOTHED IDLE false positive rate: {smoothed_metrics['idle_false_positive_rate']:.2%}")
+
+    print(f"\nConfusion matrix RAW (satır=gerçek, sütun=tahmin):")
     print(f"{'':>12}{'pred_STOP':>12}{'pred_WALK':>12}{'pred_IDLE':>12}")
-    for i, c in enumerate(classes):
-        print(f"{'true_'+LABEL_NAMES[c]:>12}{cm[i,0]:>12}{cm[i,1]:>12}{cm[i,2]:>12}")
+    for i, c in enumerate([0, 1, 2]):
+        print(f"{'true_'+LABEL_NAMES[c]:>12}{cm_raw[i,0]:>12}{cm_raw[i,1]:>12}{cm_raw[i,2]:>12}")
 
-    if collapse:
-        print(f"\n[!!!] COLLAPSE WARNING: dominant prediction = {dominant_frac:.1%} "
+    print(f"\nConfusion matrix SMOOTHED (satır=gerçek, sütun=tahmin):")
+    print(f"{'':>12}{'pred_STOP':>12}{'pred_WALK':>12}{'pred_IDLE':>12}")
+    for i, c in enumerate([0, 1, 2]):
+        print(f"{'true_'+LABEL_NAMES[c]:>12}{cm_smoothed[i,0]:>12}{cm_smoothed[i,1]:>12}{cm_smoothed[i,2]:>12}")
+
+    if smoothed_metrics['collapse_warning']:
+        print(f"\n[!!!] SMOOTHED COLLAPSE WARNING: dominant prediction = "
+              f"{smoothed_metrics['dominant_prediction_fraction']:.1%} "
               f"of all windows, or WALK count = 0. MODEL NOT DEPLOYABLE YET.")
     else:
-        print(f"\n[+] Collapse yok - dominant prediction {dominant_frac:.1%} (<90%), WALK count>0.")
+        print(f"\n[+] Collapse yok - smoothed dominant prediction "
+              f"{smoothed_metrics['dominant_prediction_fraction']:.1%} (<90%), WALK count>0.")
 
     print(f"\n[+] Çıktılar: {output_dir}/validated_timeline.csv, "
+          f"timeline_confusion_matrix_raw.csv, timeline_confusion_matrix_smoothed.csv, "
           f"timeline_confusion_matrix.csv, timeline_metrics.json, collapse_report.txt")
 
     return metrics
@@ -1245,7 +1409,7 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
 # ============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="BCI Walk/Stop pipeline v3")
+    parser = argparse.ArgumentParser(description="BCI Walk/Stop pipeline v2.6")
     parser.add_argument('--mode', required=True, choices=['train', 'train_multi', 'validate_timeline', 'predict'])
     parser.add_argument('--edf', default=None, help='(train/validate_timeline/predict)')
     parser.add_argument('--events', default=None)
@@ -1264,6 +1428,8 @@ def main():
     parser.add_argument('--balance-subjects', choices=['none', 'downsample'], default='none',
                         help='train_multi için subject-level balancing: none | downsample')
     parser.add_argument('--seed', type=int, default=42, help='Reproducible class balancing için seed')
+    parser.add_argument('--smoothing-window', type=int, choices=[1, 3, 5], default=3,
+                        help='Temporal smoothing window (1=no smoothing)')
     args = parser.parse_args()
 
     logger.setLevel(logging.WARNING)
@@ -1293,12 +1459,14 @@ def main():
         if not args.edf or not args.model:
             raise SystemExit("--edf ve --model gerekli (validate_timeline modu). --events opsiyonel.")
         run_validate_timeline(args.edf, args.events, args.model, args.output_dir,
-                               overlap_threshold=args.event_overlap_threshold)
+                               overlap_threshold=args.event_overlap_threshold,
+                               smoothing_window=args.smoothing_window)
 
     elif args.mode == 'predict':
         if not args.edf or not args.model:
             raise SystemExit("--edf ve --model gerekli (predict modu)")
-        run_unlabeled_prediction(args.edf, args.model, args.output_dir)
+        run_unlabeled_prediction(args.edf, args.model, args.output_dir,
+                                 smoothing_window=args.smoothing_window)
 
 
 if __name__ == '__main__':
