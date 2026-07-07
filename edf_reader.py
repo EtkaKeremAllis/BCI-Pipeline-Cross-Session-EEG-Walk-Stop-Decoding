@@ -1,6 +1,6 @@
 """
 Minimal EDF (European Data Format) reader - no external dependencies.
-Standart EDF spesifikasyonuna göre: https://www.edfplus.info/specs/edf.html
+Follows the standard EDF specification: https://www.edfplus.info/specs/edf.html
 """
 import numpy as np
 

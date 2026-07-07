@@ -1,31 +1,32 @@
 # EEG Walk/Stop BCI Pipeline
 
-C3/C4/Cz EEG kayıtlarından, EOG/hareket artefaktı etkisi kontrol edilerek
-Walk/Stop komut periyotlarını sınıflandıran offline BCI pipeline'ı.
-Pipeline; CSP tabanlı öznitelik çıkarımı, F-score feature selection,
-shrinkage-regularized LDA sınıflandırıcı ve LOOCV / cross-session validasyon
-kullanır; sonuçta held-out tahminlerden sembolik joystick komutu (WALK/STOP/IDLE)
-üretir.
+An offline BCI pipeline that classifies Walk/Stop command periods from C3/C4/Cz
+EEG recordings, controlling for EOG/movement artifact effects. The pipeline
+uses CSP-based feature extraction, F-score feature selection, a
+shrinkage-regularized LDA classifier, and LOOCV / cross-session validation;
+it ultimately produces a symbolic joystick command (WALK/STOP/IDLE) from the
+held-out predictions.
 
-**Kapsam notu:** Bu bir offline validasyon ve sembolik komut üretim sistemidir.
-Gerçek zamanlı EEG streaming veya gerçek HID/vJoy kontrolü sağlamaz —
-üretilen her "joystick komutu", sabit bir kayıt üzerindeki held-out (LOOCV)
-tahminlerinden türetilmiş, terminale/CSV'ye yazılan bir etikettir.
+**Scope note:** This is an offline validation and symbolic command generation
+system. It does not provide real-time EEG streaming or actual HID/vJoy
+control — every "joystick command" produced is a label derived from held-out
+(LOOCV) predictions on a fixed recording, written to the terminal/CSV.
 
-## Ana dosya
-- `bci_pipeline.py` — güncel sürüm (v3.6): tek dosya, CLI destekli, tüm pipeline'ı içerir.
+## Main file
+- `bci_pipeline.py` — current version (v3.6): a single file, CLI-enabled, containing the entire pipeline.
 
-## Geçmiş / bağımlılık dosyaları (erken sürümlerde kullanıldı)
-- `modern_bci_v2.py` — çekirdek sinyal işleme motoru (ilk versiyonlar `bci_pipeline.py`'nin
-  bunu import ettiği modüler yapıdaydı; v1.1'den itibaren tek dosyaya taşındı).
-- `edf_reader.py`, `parse_events.py`, `validate_full.py` — ilk gerçek veri validasyon script'i.
+## Historical / dependency files (used in early versions)
+- `modern_bci_v2.py` — the core signal processing engine (the first versions had a modular
+  structure where `bci_pipeline.py` imported this; merged into a single file starting from v1.1).
+- `edf_reader.py`, `parse_events.py`, `validate_full.py` — the initial real-data validation script.
 
-## Erken denemeler (terk edildi)
+## Early attempts (abandoned)
 - `production_grade_bci.py`, `realtime_eeg_motor_control.py`, `joystick_output.py` —
-  gerçek zamanlı, multi-threaded, vJoy/LSL tabanlı ilk yaklaşım. Karmaşıklığı nedeniyle
-  offline validasyon + sembolik komut yaklaşımına pivot edildi (bkz. CHANGELOG).
+  the first approach, real-time, multi-threaded, based on vJoy/LSL. Due to its
+  complexity, this was pivoted to the offline validation + symbolic command
+  approach (see CHANGELOG).
 
-## Kullanım (güncel sürüm)
+## Usage (current version)
 ```bash
 python bci_pipeline.py \
     --edf sub-01_ses-01_task-training_eeg.edf \
@@ -33,9 +34,9 @@ python bci_pipeline.py \
     --output-dir results
 ```
 
-Sürüm geçmişi için `CHANGELOG.md` dosyasına bakın; her sürüm ayrı bir git commit'i olarak
-mevcuttur (`git log --oneline`).
+See `CHANGELOG.md` for version history; each version exists as a separate git
+commit (`git log --oneline`).
 
-## Veri
-Ham EEG kayıtları (`.edf`) ve eğitilmiş model dosyaları (`.npz`, `.npy`) `.gitignore` ile
-repo dışında tutulur (dosya boyutu + denek verisi gizliliği).
+## Data
+Raw EEG recordings (`.edf`) and trained model files (`.npz`, `.npy`) are kept
+out of the repo via `.gitignore` (file size + subject data privacy).

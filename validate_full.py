@@ -1,16 +1,16 @@
 """
-DOĞRULAMA PIPELINE'I - Gerçek EEG verisi (sub-01, task-training)
+VALIDATION PIPELINE - Real EEG data (sub-01, task-training)
 ==================================================================
-Yeni algoritma YOK. Sadece:
-1) Veri okuma ve etiket doğrulama
-2) Epoch çıkarma
+NO new algorithm. Just:
+1) Data reading and label validation
+2) Epoch extraction
 3) Baseline model (LOOCV)
-4) EOG artefakt testi (EEG / EOG / EEG+EOG)
-5) EOG korelasyon analizi
-6) EOG temizleme testi (basit lineer regresyon)
+4) EOG artifact test (EEG / EOG / EEG+EOG)
+5) EOG correlation analysis
+6) EOG cleaning test (simple linear regression)
 
-Mevcut modern_bci_v2.py pipeline'ı (CSP + feature selection + shrinkage LDA)
-aynen kullanılıyor - yeni bir sınıflandırma yöntemi eklenmedi.
+The existing modern_bci_v2.py pipeline (CSP + feature selection + shrinkage LDA)
+is used as-is - no new classification method was added.
 """
 import numpy as np
 from edf_reader import read_edf
@@ -27,16 +27,16 @@ FS = 100
 WINDOW_LEN_S = 5.0
 SKIP_START_S = 1.0
 SKIP_END_S = 1.0
-LABEL_MAP = {'x5': 0, 'x8': 1}  # x5=STOP=0, x8=WALK=1. x99 (varsa) haritada yok -> atlanır.
+LABEL_MAP = {'x5': 0, 'x8': 1}  # x5=STOP=0, x8=WALK=1. x99 (if present) isn't in the map -> dropped.
 
 BEST_SHRINKAGE = 0.0
-BEST_K = 5  # önceki CV grid search'ten (bkz. önceki analiz)
+BEST_K = 5  # from the earlier CV grid search (see previous analysis)
 
 
 def make_config(channels, n_features_select=BEST_K, shrinkage=BEST_SHRINKAGE, use_csp=True):
     return BCIConfig(
         sampling_rate=FS, n_channels=len(channels), channels=channels,
-        notch_freq=60, use_notch=False,   # 60Hz notch 100Hz sampling'te imkansız (Nyquist=50Hz)
+        notch_freq=60, use_notch=False,   # 60Hz notch is impossible at 100Hz sampling (Nyquist=50Hz)
         bandpass_low=0.5, bandpass_high=45,
         fir_order=200, use_laplacian=True, use_csp=use_csp,
         lda_shrinkage=shrinkage, n_features_select=n_features_select,
@@ -44,7 +44,7 @@ def make_config(channels, n_features_select=BEST_K, shrinkage=BEST_SHRINKAGE, us
 
 
 def roc_auc(y_true, y_score):
-    """Basit ROC-AUC (Mann-Whitney U tabanlı), ek bağımlılık yok"""
+    """Simple ROC-AUC (Mann-Whitney U based), no extra dependency"""
     y_true = np.asarray(y_true)
     y_score = np.asarray(y_score)
     pos = y_score[y_true == 1]
@@ -65,9 +65,10 @@ def stats_rankdata(a):
 
 def run_loocv(config, X, y):
     """
-    Leave-one-out CV. Her fold'da: kalan (n-1) trial ile CSP+feature
-    selection+shrinkage LDA eğitilir, dışarıda bırakılan tek trial
-    tahmin edilir. Tüm fold'ların gerçek/tahmin/confidence'ı toplanır.
+    Leave-one-out CV. On each fold: CSP+feature selection+shrinkage LDA is
+    trained on the remaining (n-1) trials, and the single held-out trial is
+    predicted. The true/predicted/confidence values across all folds are
+    collected.
     """
     y = np.asarray(y)
     n = len(X)
@@ -118,37 +119,37 @@ def run_loocv(config, X, y):
 def print_confusion(cm, labels=('STOP', 'WALK')):
     tn, fp, fn, tp = cm
     print(f"{'':>15}{'Pred: ' + labels[0]:>13}{'Pred: ' + labels[1]:>13}")
-    print(f"{'Gerçek: ' + labels[0]:>15}{tn:>13}{fp:>13}")
-    print(f"{'Gerçek: ' + labels[1]:>15}{fn:>13}{tp:>13}")
+    print(f"{'True: ' + labels[0]:>15}{tn:>13}{fp:>13}")
+    print(f"{'True: ' + labels[1]:>15}{fn:>13}{tp:>13}")
 
 
 # ============================================================================
-# BÖLÜM 1: VERİ OKUMA VE ETİKET DOĞRULAMA
+# SECTION 1: DATA READING AND LABEL VALIDATION
 # ============================================================================
 print("=" * 70)
-print("BÖLÜM 1: VERİ OKUMA VE ETİKET DOĞRULAMA")
+print("SECTION 1: DATA READING AND LABEL VALIDATION")
 print("=" * 70)
 
 signals, info = read_edf(EDF_PATH)
 
-print(f"\n[1] EDF kanal listesi ({info['n_signals']} kanal):")
+print(f"\n[1] EDF channel list ({info['n_signals']} channels):")
 print(info['labels'])
 
 required_eeg = ['C3', 'C4', 'Cz']
 required_eog = ['EOG_HL', 'EOG_HR', 'EOG_VA', 'EOG_VB']
-print(f"\n[2] Kanal doğrulama:")
+print(f"\n[2] Channel validation:")
 for ch in required_eeg + required_eog:
     present = ch in info['labels']
-    print(f"    {ch:10s}: {'VAR' if present else 'YOK!!'}")
+    print(f"    {ch:10s}: {'PRESENT' if present else 'MISSING!!'}")
 
-print(f"\n[3] rexcommand events tablosu:")
+print(f"\n[3] rexcommand events table:")
 cmd_events = parse_events(CMD_EVENTS_PATH)
 print(f"{'onset':>8}{'duration':>10}{'trial_type':>12}")
 for onset, duration, trial_type in cmd_events:
     print(f"{onset:>8.2f}{duration:>10.2f}{trial_type:>12}")
 
-print(f"\n[4-5] Label mapping: x5=STOP=0, x8=WALK=1 (x99 haritada yok -> düşer)")
-print(f"\n[6] Her event için onset/duration/trial_type/label:")
+print(f"\n[4-5] Label mapping: x5=STOP=0, x8=WALK=1 (x99 not in the map -> dropped)")
+print(f"\n[6] onset/duration/trial_type/label for each event:")
 print(f"{'onset':>8}{'duration':>10}{'trial_type':>12}{'label':>8}")
 usable_events = []
 dropped_events = []
@@ -163,26 +164,27 @@ for onset, duration, trial_type in cmd_events:
 
 n_stop_events = sum(1 for e in usable_events if e[3] == 0)
 n_walk_events = sum(1 for e in usable_events if e[3] == 1)
-print(f"\n[7] Event-seviyesi özet: STOP events={n_stop_events}, WALK events={n_walk_events}, "
+print(f"\n[7] Event-level summary: STOP events={n_stop_events}, WALK events={n_walk_events}, "
       f"dropped={len(dropped_events)}")
-print("    (Bölüm 2'de bu event'ler 5s pencerelere bölünecek; beklenen trial-seviyesi "
-      "sayılar STOP=26, WALK=15, Total=41 - önceki analizle eşleşiyor)")
+print("    (In Section 2 these events will be split into 5s windows; expected trial-level "
+      "counts are STOP=26, WALK=15, Total=41 - matches the previous analysis)")
 
 
 # ============================================================================
-# BÖLÜM 2: EPOCH ÇIKARMA
+# SECTION 2: EPOCH EXTRACTION
 # ============================================================================
 print("\n" + "=" * 70)
-print("BÖLÜM 2: EPOCH ÇIKARMA")
+print("SECTION 2: EPOCH EXTRACTION")
 print("=" * 70)
 
 
 def build_windows(events, fs, skip_start, skip_end, window_len):
     """
-    events: (onset, duration, trial_type, label) listesi
-    Her event: baştan skip_start, sondan skip_end atılır, kalan aralıktan
-    non-overlapping window_len'lik pencereler çıkarılır. Pencere sığmayan
-    (çok kısa) event'ler atlanır.
+    events: a list of (onset, duration, trial_type, label)
+    For each event: skip_start is dropped from the start and skip_end from the
+    end, and non-overlapping windows of length window_len are extracted from
+    the remaining interval. Events that don't fit a window (too short) are
+    skipped.
     """
     windows = []  # (start_idx, end_idx, label)
     for onset, duration, trial_type, label in events:
@@ -191,8 +193,8 @@ def build_windows(events, fs, skip_start, skip_end, window_len):
         usable_duration = usable_end - usable_start
         n_windows = int(usable_duration // window_len)
         if n_windows <= 0:
-            print(f"    [ATLANDI - çok kısa] onset={onset:.2f} duration={duration:.2f} "
-                  f"trial_type={trial_type} (kullanılabilir süre={max(usable_duration,0):.2f}s < {window_len}s)")
+            print(f"    [SKIPPED - too short] onset={onset:.2f} duration={duration:.2f} "
+                  f"trial_type={trial_type} (usable duration={max(usable_duration,0):.2f}s < {window_len}s)")
             continue
         for w in range(n_windows):
             start_t = usable_start + w * window_len
@@ -202,7 +204,7 @@ def build_windows(events, fs, skip_start, skip_end, window_len):
     return windows
 
 
-print(f"\n[*] Pencereleme parametreleri: skip_start={SKIP_START_S}s, skip_end={SKIP_END_S}s, "
+print(f"\n[*] Windowing parameters: skip_start={SKIP_START_S}s, skip_end={SKIP_END_S}s, "
       f"window_len={WINDOW_LEN_S}s")
 windows = build_windows(usable_events, FS, SKIP_START_S, SKIP_END_S, WINDOW_LEN_S)
 
@@ -230,14 +232,14 @@ def epochs_from_windows(preprocessed_dict, windows, channels):
 
 
 # ============================================================================
-# BÖLÜM 3: BASELINE MODEL (C3, C4, Cz - LOOCV)
+# SECTION 3: BASELINE MODEL (C3, C4, Cz - LOOCV)
 # ============================================================================
 print("\n" + "=" * 70)
-print("BÖLÜM 3: BASELINE MODEL (C3, C4, Cz)")
+print("SECTION 3: BASELINE MODEL (C3, C4, Cz)")
 print("=" * 70)
 print("Pipeline: EEG -> bandpass -> feature extraction -> CSP -> feature selection -> shrinkage LDA -> LOOCV")
-print("(NOT: notch devre dışı [Nyquist=50Hz < 60Hz line noise]; Laplacian bu kanal setinde")
-print(" no-op çünkü komşu elektrotlar (FC3/CP3/C1/C5 vb.) EDF'den yüklenmedi - sadece C3/C4/Cz var.)")
+print("(NOTE: notch disabled [Nyquist=50Hz < 60Hz line noise]; Laplacian is a no-op on this")
+print(" channel set because neighboring electrodes (FC3/CP3/C1/C5 etc.) weren't loaded from the EDF - only C3/C4/Cz are present.)")
 
 eeg_channels = ['C3', 'C4', 'Cz']
 config_eeg = make_config(eeg_channels)
@@ -247,7 +249,7 @@ raw_eeg = {ch: signals[ch] for ch in eeg_channels}
 preproc_eeg = pipeline_eeg.preprocess(raw_eeg)
 X_eeg, y_eeg = epochs_from_windows(preproc_eeg, windows, eeg_channels)
 
-print(f"\n[*] LOOCV çalıştırılıyor ({len(X_eeg)} fold)...")
+print(f"\n[*] Running LOOCV ({len(X_eeg)} folds)...")
 result_eeg = run_loocv(config_eeg, X_eeg, y_eeg)
 
 print(f"\nAccuracy : {result_eeg['accuracy']:.2%}")
@@ -260,27 +262,27 @@ print_confusion(result_eeg['confusion'])
 
 
 # ============================================================================
-# BÖLÜM 4: EOG ARTEFAKT TESTİ (A: EEG, B: EOG, C: EEG+EOG)
+# SECTION 4: EOG ARTIFACT TEST (A: EEG, B: EOG, C: EEG+EOG)
 # ============================================================================
 print("\n" + "=" * 70)
-print("BÖLÜM 4: EOG ARTEFAKT TESTİ")
+print("SECTION 4: EOG ARTIFACT TEST")
 print("=" * 70)
 
 eog_channels = ['EOG_HL', 'EOG_HR', 'EOG_VA', 'EOG_VB']
 combined_channels = eeg_channels + eog_channels
 
-# A) Sadece EEG - Bölüm 3'te zaten hesaplandı, tekrar kullan
-print("\n[A] Sadece EEG (C3, C4, Cz) - Bölüm 3 sonucu tekrar kullanılıyor")
+# A) EEG only - already computed in Section 3, reuse it
+print("\n[A] EEG only (C3, C4, Cz) - reusing the Section 3 result")
 result_A = result_eeg
 
-# B) Sadece EOG
-print("\n[B] Sadece EOG (EOG_HL, EOG_HR, EOG_VA, EOG_VB)")
+# B) EOG only
+print("\n[B] EOG only (EOG_HL, EOG_HR, EOG_VA, EOG_VB)")
 config_eog = make_config(eog_channels)
 pipeline_eog = ModernBCIPipeline(config_eog)
 raw_eog = {ch: signals[ch] for ch in eog_channels}
 preproc_eog = pipeline_eog.preprocess(raw_eog)
 X_eog, y_eog = epochs_from_windows(preproc_eog, windows, eog_channels)
-print(f"[*] LOOCV çalıştırılıyor ({len(X_eog)} fold)...")
+print(f"[*] Running LOOCV ({len(X_eog)} folds)...")
 result_B = run_loocv(config_eog, X_eog, y_eog)
 
 # C) EEG + EOG
@@ -290,45 +292,45 @@ pipeline_combined = ModernBCIPipeline(config_combined)
 raw_combined = {ch: signals[ch] for ch in combined_channels}
 preproc_combined = pipeline_combined.preprocess(raw_combined)
 X_combined, y_combined = epochs_from_windows(preproc_combined, windows, combined_channels)
-print(f"[*] LOOCV çalıştırılıyor ({len(X_combined)} fold)...")
+print(f"[*] Running LOOCV ({len(X_combined)} folds)...")
 result_C = run_loocv(config_combined, X_combined, y_combined)
 
 print("\n" + "-" * 60)
-print(f"{'Koşul':>20}{'Accuracy':>12}{'F1':>10}{'ROC-AUC':>10}")
+print(f"{'Condition':>20}{'Accuracy':>12}{'F1':>10}{'ROC-AUC':>10}")
 print("-" * 60)
-print(f"{'A) Sadece EEG':>20}{result_A['accuracy']:>12.2%}{result_A['f1']:>10.2%}{result_A['roc_auc']:>10.3f}")
-print(f"{'B) Sadece EOG':>20}{result_B['accuracy']:>12.2%}{result_B['f1']:>10.2%}{result_B['roc_auc']:>10.3f}")
+print(f"{'A) EEG only':>20}{result_A['accuracy']:>12.2%}{result_A['f1']:>10.2%}{result_A['roc_auc']:>10.3f}")
+print(f"{'B) EOG only':>20}{result_B['accuracy']:>12.2%}{result_B['f1']:>10.2%}{result_B['roc_auc']:>10.3f}")
 print(f"{'C) EEG+EOG':>20}{result_C['accuracy']:>12.2%}{result_C['f1']:>10.2%}{result_C['roc_auc']:>10.3f}")
 print("-" * 60)
 
-print("\nYorum:")
+print("\nInterpretation:")
 if result_B['accuracy'] < 0.65:
-    print(f"  - Sadece EOG accuracy düşük ({result_B['accuracy']:.2%}) -> iyi işaret, "
-          f"göz hareketi tek başına Walk/Stop'u ayırt etmiyor.")
+    print(f"  - EOG-only accuracy is low ({result_B['accuracy']:.2%}) -> a good sign, "
+          f"eye movement alone does not distinguish Walk/Stop.")
 else:
-    print(f"  - Sadece EOG accuracy YÜKSEK ({result_B['accuracy']:.2%}) -> DİKKAT: "
-          f"model muhtemelen artefakt öğreniyor, EEG sonucu şüpheli.")
+    print(f"  - EOG-only accuracy is HIGH ({result_B['accuracy']:.2%}) -> CAUTION: "
+          f"the model is likely learning the artifact, the EEG result is suspect.")
 
 diff = result_C['accuracy'] - result_A['accuracy']
 if diff > 0.05:
-    print(f"  - EEG+EOG, sadece EEG'ye göre {diff:.2%} daha yüksek -> EOG katkısı güçlü, "
-          f"EEG-only sonucu artefaktla şişmiş olabilir.")
+    print(f"  - EEG+EOG is {diff:.2%} higher than EEG-only -> EOG contribution is strong, "
+          f"the EEG-only result may be inflated by artifact.")
 else:
-    print(f"  - EEG+EOG ({result_C['accuracy']:.2%}) ile sadece EEG ({result_A['accuracy']:.2%}) "
-          f"arasında büyük fark yok -> EOG eklenmesi sonucu belirgin şekilde artırmıyor.")
+    print(f"  - No large difference between EEG+EOG ({result_C['accuracy']:.2%}) and EEG-only "
+          f"({result_A['accuracy']:.2%}) -> adding EOG does not markedly improve the result.")
 
 
 # ============================================================================
-# BÖLÜM 5: EOG KORELASYON ANALİZİ
+# SECTION 5: EOG CORRELATION ANALYSIS
 # ============================================================================
 print("\n" + "=" * 70)
-print("BÖLÜM 5: EOG KORELASYON ANALİZİ")
+print("SECTION 5: EOG CORRELATION ANALYSIS")
 print("=" * 70)
 
 pairs = [('C3', 'EOG_VA'), ('C4', 'EOG_VA'), ('Cz', 'EOG_VA'),
          ('C3', 'EOG_HL'), ('C4', 'EOG_HL')]
 
-# Aynı preprocess edilmiş sinyaller (Bölüm 3/4'ten) - EEG ve EOG ayrı ayrı preprocess edilmişti
+# Same preprocessed signals (from Section 3/4) - EEG and EOG were preprocessed separately
 all_signals_preproc = {**preproc_eeg, **preproc_eog}
 
 corr_rows = []
@@ -347,31 +349,31 @@ pair_names = [f"{a}-{b}" for a, b in pairs]
 stop_corrs = {p: np.mean([r[p] for r in corr_rows if r['label'] == 0]) for p in pair_names}
 walk_corrs = {p: np.mean([r[p] for r in corr_rows if r['label'] == 1]) for p in pair_names}
 
-print(f"\n{'Kanal çifti':>15}{'STOP ort. corr':>18}{'WALK ort. corr':>18}{'Fark':>10}")
+print(f"\n{'Channel pair':>15}{'STOP avg. corr':>18}{'WALK avg. corr':>18}{'Diff':>10}")
 for p in pair_names:
     diff = walk_corrs[p] - stop_corrs[p]
     print(f"{p:>15}{stop_corrs[p]:>18.3f}{walk_corrs[p]:>18.3f}{diff:>10.3f}")
 
 max_abs_diff = max(abs(walk_corrs[p] - stop_corrs[p]) for p in pair_names)
-print(f"\nYorum: en büyük |WALK-STOP| korelasyon farkı = {max_abs_diff:.3f}")
+print(f"\nInterpretation: largest |WALK-STOP| correlation difference = {max_abs_diff:.3f}")
 if max_abs_diff > 0.15:
-    print("  -> WALK sırasında EOG korelasyonu belirgin şekilde değişiyor - göz/hareket "
-          "etkisi olası, EEG sonucu temkinli yorumlanmalı.")
+    print("  -> EOG correlation changes noticeably during WALK - a possible eye/movement "
+          "effect, the EEG result should be interpreted cautiously.")
 else:
-    print("  -> STOP/WALK arasında EOG korelasyonu belirgin farklılaşmıyor - EEG kanallarının "
-          "EOG'dan bağımsız bilgi taşıdığına dair zayıf bir kanıt.")
+    print("  -> EOG correlation does not differ noticeably between STOP/WALK - weak evidence "
+          "that the EEG channels carry information independent of EOG.")
 
 
 # ============================================================================
-# BÖLÜM 6: EOG TEMİZLEME TESTİ (basit lineer regresyon)
+# SECTION 6: EOG CLEANING TEST (simple linear regression)
 # ============================================================================
 print("\n" + "=" * 70)
-print("BÖLÜM 6: EOG TEMİZLEME TESTİ")
+print("SECTION 6: EOG CLEANING TEST")
 print("=" * 70)
-print("EEG_clean = EEG - (EOG kanallarından lineer regresyonla tahmin edilen kısım)")
-print("Regresyon katsayıları TÜM sürekli kayıt üzerinde (etiketsiz, sızıntı yok) hesaplanıyor.\n")
+print("EEG_clean = EEG - (the portion predicted from the EOG channels via linear regression)")
+print("Regression coefficients are computed over the ENTIRE continuous recording (unlabeled, no leakage).\n")
 
-# EOG regressor matrisi (sürekli kayıt, preprocess edilmiş EOG sinyalleri)
+# EOG regressor matrix (continuous recording, preprocessed EOG signals)
 EOG_mat = np.column_stack([preproc_eog[ch] for ch in eog_channels])  # (n_samples, 4)
 EOG_design = np.column_stack([EOG_mat, np.ones(len(EOG_mat))])  # + intercept
 
@@ -384,14 +386,14 @@ for ch in eeg_channels:
     predicted = EOG_design @ beta
     preproc_eeg_clean[ch] = target - predicted
     r2 = 1 - np.sum((target - predicted) ** 2) / np.sum((target - target.mean()) ** 2)
-    print(f"  {ch}: EOG regresyonu R^2 = {r2:.4f} (EOG'un açıkladığı varyans oranı)")
+    print(f"  {ch}: EOG regression R^2 = {r2:.4f} (fraction of variance explained by EOG)")
 
 X_clean, y_clean = epochs_from_windows(preproc_eeg_clean, windows, eeg_channels)
-print(f"\n[*] Temizlenmiş EEG ile LOOCV çalıştırılıyor ({len(X_clean)} fold)...")
+print(f"\n[*] Running LOOCV on the cleaned EEG ({len(X_clean)} folds)...")
 result_clean = run_loocv(config_eeg, X_clean, y_clean)
 
 print("\n" + "-" * 60)
-print(f"{'Koşul':>25}{'Accuracy':>12}{'F1':>10}{'ROC-AUC':>10}")
+print(f"{'Condition':>25}{'Accuracy':>12}{'F1':>10}{'ROC-AUC':>10}")
 print("-" * 60)
 print(f"{'Raw EEG':>25}{result_A['accuracy']:>12.2%}{result_A['f1']:>10.2%}{result_A['roc_auc']:>10.3f}")
 print(f"{'EOG-only':>25}{result_B['accuracy']:>12.2%}{result_B['f1']:>10.2%}{result_B['roc_auc']:>10.3f}")
@@ -399,14 +401,14 @@ print(f"{'EOG-cleaned EEG':>25}{result_clean['accuracy']:>12.2%}{result_clean['f
 print("-" * 60)
 
 drop = result_A['accuracy'] - result_clean['accuracy']
-print(f"\nYorum: EOG temizleme sonrası accuracy değişimi: {-drop:+.2%}")
+print(f"\nInterpretation: accuracy change after EOG cleaning: {-drop:+.2%}")
 if result_clean['accuracy'] >= result_A['accuracy'] - 0.05:
-    print("  -> Skor temizleme sonrası da yüksek kalıyor - EEG sinyalinin EOG'a bağımlı "
-          "olmadığına dair olumlu kanıt.")
+    print("  -> The score stays high after cleaning - positive evidence that the EEG signal "
+          "is not dependent on EOG.")
 else:
-    print("  -> Skor temizleme sonrası belirgin düştü - önceki EEG sonucunun bir kısmı "
-          "EOG artefaktından geliyor olabilir.")
+    print("  -> The score dropped noticeably after cleaning - part of the earlier EEG result "
+          "may have come from the EOG artifact.")
 
 print("\n" + "=" * 70)
-print("DOĞRULAMA TAMAMLANDI (Adım 1-6). Adım 7 (rexstate ikinci analiz) bekliyor.")
+print("VALIDATION COMPLETE (Steps 1-6). Step 7 (rexstate second analysis) pending.")
 print("=" * 70)

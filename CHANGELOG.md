@@ -1,45 +1,47 @@
 # Changelog
 
-Tüm sürümler, EEG'den (C3/C4/Cz) Walk/Stop niyetini offline olarak sınıflandırıp
-sembolik joystick komutu (WALK/STOP/IDLE) üretme hedefine doğru ilerler.
+All versions move toward the goal of offline-classifying Walk/Stop intent from
+EEG (C3/C4/Cz) and producing a symbolic joystick command (WALK/STOP/IDLE).
 
-## Faz 0 — Gerçek zamanlı prototip (terk edildi, offline'a pivot)
-- **Symbolic joystick output layer** — WALK/STOP/IDLE için console tabanlı çıktı katmanı.
-- **Real-time EEG motor control loop** — LSL streaming ile canlı okuma denemesi.
-- **production_grade_bci.py** — Multi-threaded gerçek zamanlı sistem: EMA baseline locking,
-  ICA artefakt temizleme, CAR, CSP+LDA, vJoy + LSL entegrasyonu. Karmaşıklığı yönetilemez
-  hale geldiği için offline yaklaşıma geçildi.
+## Phase 0 — Real-time prototype (abandoned, pivoted to offline)
+- **Symbolic joystick output layer** — a console-based output layer for WALK/STOP/IDLE.
+- **Real-time EEG motor control loop** — a live-reading attempt with LSL streaming.
+- **production_grade_bci.py** — Multi-threaded real-time system: EMA baseline locking,
+  ICA artifact removal, CAR, CSP+LDA, vJoy + LSL integration. Switched to the offline
+  approach once the complexity became unmanageable.
 
-## Faz 1 — Çekirdek sinyal işleme motoru (`modern_bci_v2.py`)
-- **v0.1** — CSP, 40+ zaman/frekans/uzamsal öznitelik, Laplacian referans, FIR bandpass, config sistemi.
-- **v0.2** — CSPFilter / FeatureSelector / SimpleLDA sınıfları, sentetik motor-imagery trial üretici, k-fold CV.
-- **v0.3** — Refactor: gereksiz karmaşıklık atıldı, sadece CSP + F-score feature selection + shrinkage-LDA kaldı (487 satır).
+## Phase 1 — Core signal processing engine (`modern_bci_v2.py`)
+- **v0.1** — CSP, 40+ time/frequency/spatial features, Laplacian reference, FIR bandpass, config system.
+- **v0.2** — CSPFilter / FeatureSelector / SimpleLDA classes, synthetic motor-imagery trial generator, k-fold CV.
+- **v0.3** — Refactor: unnecessary complexity dropped, leaving only CSP + F-score feature selection + shrinkage-LDA (487 lines).
 
-## Faz 2 — Gerçek veri doğrulaması
-- **validate_full.py + edf_reader.py + parse_events.py** — sub-01 training session üzerinde
-  ilk gerçek LOOCV baseline + EOG artefakt/korelasyon/temizleme testleri.
+## Phase 2 — Real data validation
+- **validate_full.py + edf_reader.py + parse_events.py** — the first real LOOCV baseline
+  + EOG artifact/correlation/cleaning tests on the sub-01 training session.
 
-## Faz 3 — `bci_pipeline.py` tek dosya CLI
-- **v1.1** — Modüler fonksiyonlara reorganize edildi, CLI eklendi, structured output (metrics.json, commands.csv, summary.txt).
-- **v1.1.1** — Model persistence, ROC curve + confusion matrix plotları, TSV-first event parsing, `OutputDevice` soyutlaması.
-- **v2.0** — `train_validate` / `predict` mod ayrımı, vJoy/ViGEm çıktı backend'leri, command smoothing.
+## Phase 3 — `bci_pipeline.py` single-file CLI
+- **v1.1** — Reorganized into modular functions, CLI added, structured output (metrics.json, commands.csv, summary.txt).
+- **v1.1.1** — Model persistence, ROC curve + confusion matrix plots, TSV-first event parsing, `OutputDevice` abstraction.
+- **v2.0** — `train_validate` / `predict` mode split, vJoy/ViGEm output backends, command smoothing.
 
-## Faz 4 — v3 hattı (kritik hata düzeltmesi + iterasyon)
-- **v3.0** — **Kritik düzeltme**: training verisi (etiketli event pencereleri) ile prediction
-  verisinin (sürekli kayıt üzerinde sliding window) dağılımı uyuşmuyordu → model collapse
-  oluyordu. `validate_timeline` modu, IDLE confidence gate, model persistence yeniden tasarlandı.
-- **v3.1** — Multi-dataset / cross-session training desteği (`run_train_multi`).
+## Phase 4 — v3 line (critical bug fix + iteration)
+- **v3.0** — **Critical fix**: the distribution of the training data (labeled event
+  windows) didn't match the prediction data (sliding window over the continuous
+  recording), causing model collapse. Redesigned `validate_timeline` mode, IDLE
+  confidence gate, and model persistence.
+- **v3.1** — Multi-dataset / cross-session training support (`run_train_multi`).
 - **v3.2** — WALK/STOP class balancing.
-- **v3.3** — Sliding window boyutu/adımı ince ayar: 5.0s/1.0s → 3.0s/0.25s.
-- **v3.4** — Subject-level balancing + tam kayıt üzerinde etiketsiz prediction pipeline (`run_unlabeled_prediction`).
-- **v3.5** — Predicted label'lar için temporal smoothing, timeline metrikleri, confusion matrix CSV export.
-- **v3.6 (mevcut en güncel)** — Sabit C3/C4/Cz yerine esnek kanal seti çözümleme (`resolve_channels`).
+- **v3.3** — Fine-tuned sliding window size/step: 5.0s/1.0s -> 3.0s/0.25s.
+- **v3.4** — Subject-level balancing + unlabeled prediction pipeline over the full recording (`run_unlabeled_prediction`).
+- **v3.5** — Temporal smoothing for predicted labels, timeline metrics, confusion matrix CSV export.
+- **v3.6 (current, latest)** — Flexible channel-set resolution (`resolve_channels`) instead of fixed C3/C4/Cz.
 
 ---
 
-### Not: Atlanan/birleştirilen kopyalar
-Yüklenen dosyaların önemli bir kısmı birebir kopyaydı (aynı içerik, farklı dosya adı) ve
-bu geçmişe dahil edilmedi: `bci_pipeline_v3_1_.py` (= v3.0), `bci_pipeline_2_.py` (= v2.0),
+### Note: Skipped/merged duplicates
+A significant portion of the uploaded files were exact duplicates (identical
+content, different file name) and were not included in this history:
+`bci_pipeline_v3_1_.py` (= v3.0), `bci_pipeline_2_.py` (= v2.0),
 `bci_pipeline_v3_5__1_/_2_/v3_6_.py` (= v3.4), `bci_pipeline_v2_6_1_.py` (= v3.5),
-`validate_full`'un 3 ek kopyası, `parse_events_1_.py`, `edf_reader_1_.py`,
-`modern_bci_v2_3_.py` (= v0.3), `modern_bci_vclaude3.py` (v0.2'ye çok yakın, ~37 satır fark).
+3 additional copies of `validate_full`, `parse_events_1_.py`, `edf_reader_1_.py`,
+`modern_bci_v2_3_.py` (= v0.3), `modern_bci_vclaude3.py` (very close to v0.2, ~37-line difference).

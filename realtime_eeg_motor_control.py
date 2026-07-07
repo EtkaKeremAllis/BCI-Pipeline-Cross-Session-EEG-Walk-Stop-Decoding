@@ -9,41 +9,41 @@ import matplotlib.patches as mpatches
 
 class RealTimeEEGProcessor:
     """
-    Real-time EEG işlemci - Es zamanli noise reduction ve motor komutu tetikleme
+    Real-time EEG processor - synchronous noise reduction and motor command triggering
     - Sample Rate: 256 Hz
-    - Şebeke Gürültüsü: 50 Hz
-    - Elektrotlar: C3, C4, Cz (sensorimotor korteks)
+    - Line Noise: 50 Hz
+    - Electrodes: C3, C4, Cz (sensorimotor cortex)
     """
     
     def __init__(self, sampling_rate=256, buffer_size=256):
         """
         Args:
-            sampling_rate: Örnekleme hızı (Hz)
-            buffer_size: Buffer boyutu (1 saniye = 256 örnek)
+            sampling_rate: Sampling rate (Hz)
+            buffer_size: Buffer size (1 second = 256 samples)
         """
         self.fs = sampling_rate
         self.buffer_size = buffer_size
         self.nyquist = sampling_rate / 2
         
-        # Elektrotlar için buffer'lar
+        # Buffers for the electrodes
         self.buffers = {
             'C3': deque(maxlen=buffer_size),
             'C4': deque(maxlen=buffer_size),
             'Cz': deque(maxlen=buffer_size)
         }
         
-        # Threshold değerleri (adaptive)
+        # Threshold values (adaptive)
         self.thresholds = {
             'C3': 0.8,
             'C4': 0.8,
             'Cz': 0.7
         }
         
-        # Motor komutu state
+        # Motor command state
         self.motor_command_active = False
         self.command_history = []
         
-        # İstatistikler
+        # Statistics
         self.stats = {
             'C3': {'mu': [], 'beta': []},
             'C4': {'mu': [], 'beta': []},
@@ -52,14 +52,14 @@ class RealTimeEEGProcessor:
     
     def create_bandpass_sos(self, lowcut, highcut, order=3):
         """
-        Bandpass filtresi (düşük order)
+        Bandpass filter (low order)
         
         Args:
-            lowcut, highcut: Frekans aralığı
-            order: Filtre sırası (düşük: stabilite)
+            lowcut, highcut: Frequency range
+            order: Filter order (low: stability)
         
         Returns:
-            SOS formatında filtre
+            Filter in SOS format
         """
         low_norm = lowcut / self.nyquist
         high_norm = highcut / self.nyquist
@@ -67,7 +67,7 @@ class RealTimeEEGProcessor:
         return sos
     
     def create_notch_sos(self, freq=50, quality=20):
-        """Notch filtresi (50 Hz şebeke gürültüsü)"""
+        """Notch filter (50 Hz line noise)"""
         w0_norm = freq / self.nyquist
         b, a = signal.iirnotch(w0_norm, quality)
         sos = signal.tf2sos(b, a)
@@ -75,30 +75,30 @@ class RealTimeEEGProcessor:
     
     def process_signal(self, raw_signal, electrode='C3'):
         """
-        Raw sinyali işle (real-time noise reduction)
+        Process the raw signal (real-time noise reduction)
         
         Args:
-            raw_signal: Ham sinyal array
-            electrode: Elektrot adı (C3, C4, Cz)
+            raw_signal: Raw signal array
+            electrode: Electrode name (C3, C4, Cz)
         
         Returns:
-            Işlenmiş sinyal, Mu bandı enerji, Beta bandı enerji
+            Processed signal, Mu band energy, Beta band energy
         """
-        # 1. Notch filtresi (50 Hz)
+        # 1. Notch filter (50 Hz)
         notch_sos = self.create_notch_sos(freq=50, quality=20)
         notch_filtered = signal.sosfiltfilt(notch_sos, raw_signal)
         
-        # 2. Mu ritmi (8-13 Hz) - sensorimotor aktivite
+        # 2. Mu rhythm (8-13 Hz) - sensorimotor activity
         mu_sos = self.create_bandpass_sos(lowcut=8, highcut=13, order=3)
         mu_signal = signal.sosfiltfilt(mu_sos, notch_filtered)
-        mu_energy = np.mean(mu_signal ** 2)  # Mu bandı enerjisi
+        mu_energy = np.mean(mu_signal ** 2)  # Mu band energy
         
-        # 3. Beta ritmi (13-30 Hz) - motor kontrol
+        # 3. Beta rhythm (13-30 Hz) - motor control
         beta_sos = self.create_bandpass_sos(lowcut=13, highcut=30, order=3)
         beta_signal = signal.sosfiltfilt(beta_sos, notch_filtered)
-        beta_energy = np.mean(beta_signal ** 2)  # Beta bandı enerjisi
+        beta_energy = np.mean(beta_signal ** 2)  # Beta band energy
         
-        # İstatistikler kaydet
+        # Save statistics
         self.stats[electrode]['mu'].append(mu_energy)
         self.stats[electrode]['beta'].append(beta_energy)
         
@@ -106,13 +106,13 @@ class RealTimeEEGProcessor:
     
     def detect_motor_command(self, electrode_data):
         """
-        Motor komutu algılama (treshold detection)
+        Motor command detection (threshold detection)
         
         Args:
-            electrode_data: {electrode: energy} şeklinde dict
+            electrode_data: dict in the form {electrode: energy}
         
         Returns:
-            Motor komudu tetiklenmiş mi? (boolean)
+            Whether a motor command was triggered (boolean)
         """
         command_triggered = False
         triggered_electrodes = []
@@ -134,77 +134,77 @@ class RealTimeEEGProcessor:
     
     def generate_joystick_command(self, triggered_electrodes):
         """
-        Joystick yürüme komudu oluştur
+        Generate joystick walk command
         
         Args:
-            triggered_electrodes: Tetiklenen elektrotlar
+            triggered_electrodes: Triggered electrodes
         
         Returns:
-            Joystick komudu (string)
+            Joystick command (string)
         """
         if 'C3' in triggered_electrodes or 'C4' in triggered_electrodes:
-            return "FORWARD"  # İleri hareket
+            return "FORWARD"  # Forward movement
         elif 'Cz' in triggered_electrodes:
-            return "STOP"     # Durdur
+            return "STOP"     # Stop
         return None
     
     def apply_joystick_command(self, command):
         """
-        Joystick komudu uygula (simülasyon)
+        Apply joystick command (simulation)
         
         Args:
-            command: Joystick komudu
+            command: Joystick command
         """
         if command == "FORWARD":
-            print(f"[⚡ MOTOR COMMAND] FORWARD - Yürüme aktivasyonu algılandı!")
-            # Burada gerçek joystick kontrolü yapılabilir
-            # pynput veya PyGame ile implementasyon
+            print(f"[⚡ MOTOR COMMAND] FORWARD - Walking activation detected!")
+            # Real joystick control could be implemented here
+            # implementation with pynput or PyGame
             return True
         elif command == "STOP":
-            print(f"[⚡ MOTOR COMMAND] STOP - Yürüme durdurma sinyali!")
+            print(f"[⚡ MOTOR COMMAND] STOP - Walking stop signal!")
             return False
         return None
 
 
 class EEGDataGenerator:
     """
-    EEG veri oluşturucu - Normal vs Yürürken verileri
+    EEG data generator - Rest vs Walking data
     """
     
     def __init__(self, sampling_rate=256, duration=10):
         """
         Args:
-            sampling_rate: Örnekleme hızı
-            duration: Veri süresi (saniye)
+            sampling_rate: Sampling rate
+            duration: Data duration (seconds)
         """
         self.fs = sampling_rate
         self.duration = duration
         self.t = np.arange(0, duration, 1/sampling_rate)
     
     def generate_normal_eeg(self):
-        """Normal EEG verisi (dinlenme durumu) - Mu ritmi baskınlık"""
-        # C3: Sol motor korteks - Mu dalgası baskın
+        """Normal EEG data (resting state) - Mu rhythm dominant"""
+        # C3: Left motor cortex - Mu wave dominant
         c3_signal = (
             2.0 * np.sin(2 * np.pi * 10 * self.t) +      # 10 Hz Mu
-            0.5 * np.sin(2 * np.pi * 20 * self.t) +      # Beta daha az
-            0.3 * np.random.randn(len(self.t))            # Gürültü
+            0.5 * np.sin(2 * np.pi * 20 * self.t) +      # Less beta
+            0.3 * np.random.randn(len(self.t))            # Noise
         )
         
-        # C4: Sağ motor korteks
+        # C4: Right motor cortex
         c4_signal = (
-            2.1 * np.sin(2 * np.pi * 10 * self.t + 0.5) + # 10 Hz Mu (faz farkı)
+            2.1 * np.sin(2 * np.pi * 10 * self.t + 0.5) + # 10 Hz Mu (phase difference)
             0.4 * np.sin(2 * np.pi * 20 * self.t) +        # Beta
             0.3 * np.random.randn(len(self.t))
         )
         
-        # Cz: Orta hat (bacak kontrolü) - Daha az aktivite
+        # Cz: Midline (leg control) - Less activity
         cz_signal = (
-            1.0 * np.sin(2 * np.pi * 10 * self.t) +        # Zayıf Mu
-            0.3 * np.sin(2 * np.pi * 20 * self.t) +        # Zayıf Beta
+            1.0 * np.sin(2 * np.pi * 10 * self.t) +        # Weak Mu
+            0.3 * np.sin(2 * np.pi * 20 * self.t) +        # Weak Beta
             0.3 * np.random.randn(len(self.t))
         )
         
-        # 50 Hz şebeke gürültüsü ekle
+        # Add 50 Hz line noise
         line_noise = 0.5 * np.sin(2 * np.pi * 50 * self.t)
         
         c3_signal += line_noise
@@ -220,36 +220,36 @@ class EEGDataGenerator:
     
     def generate_walking_eeg(self):
         """
-        Yürürken EEG verisi
-        - Mu ritmi baskılanması (desynchronization): 8-13 Hz azalır
-        - Beta aktivitesi artışı: 13-30 Hz artar
-        - Bacak kontrolü (Cz) daha baskın
+        EEG data while walking
+        - Mu rhythm suppression (desynchronization): 8-13 Hz decreases
+        - Increase in Beta activity: 13-30 Hz increases
+        - Leg control (Cz) more dominant
         """
-        # Yürüme sinyal - 0.5 Hz (yaşamsal ritim)
+        # Walking signal - 0.5 Hz (gait rhythm)
         walking_phase = 3.0 * np.sin(2 * np.pi * 0.5 * self.t)
         
-        # C3: Sol motor korteks - Mu baskılanması, Beta artışı
+        # C3: Left motor cortex - Mu suppression, Beta increase
         c3_signal = (
-            0.8 * np.sin(2 * np.pi * 10 * self.t) +       # Mu azaldı (2.0 → 0.8)
-            1.5 * np.sin(2 * np.pi * 20 * self.t + walking_phase) +  # Beta arttı (0.5 → 1.5)
+            0.8 * np.sin(2 * np.pi * 10 * self.t) +       # Mu decreased (2.0 -> 0.8)
+            1.5 * np.sin(2 * np.pi * 20 * self.t + walking_phase) +  # Beta increased (0.5 -> 1.5)
             0.4 * np.random.randn(len(self.t))
         )
         
-        # C4: Sağ motor korteks - Mu baskılanması, Beta artışı
+        # C4: Right motor cortex - Mu suppression, Beta increase
         c4_signal = (
-            0.9 * np.sin(2 * np.pi * 10 * self.t + 0.5) + # Mu azaldı
-            1.4 * np.sin(2 * np.pi * 20 * self.t + walking_phase + 0.3) +  # Beta arttı
+            0.9 * np.sin(2 * np.pi * 10 * self.t + 0.5) + # Mu decreased
+            1.4 * np.sin(2 * np.pi * 20 * self.t + walking_phase + 0.3) +  # Beta increased
             0.4 * np.random.randn(len(self.t))
         )
         
-        # Cz: Bacak kontrolü - Daha baskın
+        # Cz: Leg control - More dominant
         cz_signal = (
-            0.5 * np.sin(2 * np.pi * 10 * self.t) +        # Mu çok azaldı
-            2.0 * np.sin(2 * np.pi * 20 * self.t + walking_phase) +  # Beta çok arttı
+            0.5 * np.sin(2 * np.pi * 10 * self.t) +        # Mu greatly decreased
+            2.0 * np.sin(2 * np.pi * 20 * self.t + walking_phase) +  # Beta greatly increased
             0.4 * np.random.randn(len(self.t))
         )
         
-        # 50 Hz şebeke gürültüsü
+        # 50 Hz line noise
         line_noise = 0.5 * np.sin(2 * np.pi * 50 * self.t)
         
         c3_signal += line_noise
@@ -266,25 +266,25 @@ class EEGDataGenerator:
 
 def analyze_eeg_recordings():
     """
-    Normal ve Yürürken EEG kayıtlarını analiz et
+    Analyze Normal and Walking EEG recordings
     """
     print("=" * 70)
-    print("REAL-TIME EEG PROCESSOR - Normal vs Yürürken Analizi")
+    print("REAL-TIME EEG PROCESSOR - Normal vs Walking Analysis")
     print("=" * 70)
     
-    # Parametreler
+    # Parameters
     sampling_rate = 256
     duration = 10
     
-    # Veri oluştur
+    # Generate data
     generator = EEGDataGenerator(sampling_rate=sampling_rate, duration=duration)
     normal_eeg = generator.generate_normal_eeg()
     walking_eeg = generator.generate_walking_eeg()
     
-    # Processor oluştur
+    # Create processor
     processor = RealTimeEEGProcessor(sampling_rate=sampling_rate)
     
-    print("\n[1] NORMAL EEG ANALİZİ (Dinlenme Durumu)")
+    print("\n[1] NORMAL EEG ANALYSIS (Resting State)")
     print("-" * 70)
     
     normal_results = {}
@@ -299,23 +299,23 @@ def analyze_eeg_recordings():
         }
         
         print(f"  {electrode}:")
-        print(f"    Mu Enerji (8-13 Hz):   {mu_energy:.6f}")
-        print(f"    Beta Enerji (13-30 Hz): {beta_energy:.6f}")
-        print(f"    Mu/Beta Oranı:         {normal_results[electrode]['ratio']:.4f}")
+        print(f"    Mu Energy (8-13 Hz):   {mu_energy:.6f}")
+        print(f"    Beta Energy (13-30 Hz): {beta_energy:.6f}")
+        print(f"    Mu/Beta Ratio:         {normal_results[electrode]['ratio']:.4f}")
     
-    # Motor komutu algıla - Normal
+    # Detect motor command - Normal
     electrode_energy_normal = {
         'C3': normal_results['C3']['mu_energy'],
         'C4': normal_results['C4']['mu_energy'],
         'Cz': normal_results['Cz']['mu_energy']
     }
     command_triggered, electrodes = processor.detect_motor_command(electrode_energy_normal)
-    print(f"\n  Motor Komudu Tetiklendi: {command_triggered}")
+    print(f"\n  Motor Command Triggered: {command_triggered}")
     
-    # Processor reset
+    # Reset processor
     processor = RealTimeEEGProcessor(sampling_rate=sampling_rate)
     
-    print("\n[2] YÜRÜRKEN EEG ANALİZİ (Hareket Durumu)")
+    print("\n[2] WALKING EEG ANALYSIS (Movement State)")
     print("-" * 70)
     
     walking_results = {}
@@ -330,18 +330,18 @@ def analyze_eeg_recordings():
         }
         
         print(f"  {electrode}:")
-        print(f"    Mu Enerji (8-13 Hz):    {mu_energy:.6f}")
-        print(f"    Beta Enerji (13-30 Hz):  {beta_energy:.6f}")
-        print(f"    Mu/Beta Oranı:          {walking_results[electrode]['ratio']:.4f}")
+        print(f"    Mu Energy (8-13 Hz):    {mu_energy:.6f}")
+        print(f"    Beta Energy (13-30 Hz):  {beta_energy:.6f}")
+        print(f"    Mu/Beta Ratio:          {walking_results[electrode]['ratio']:.4f}")
     
-    # Motor komutu algıla - Yürürken
+    # Detect motor command - Walking
     electrode_energy_walking = {
-        'C3': walking_results['C3']['beta_energy'],  # Beta'ya bakalım
+        'C3': walking_results['C3']['beta_energy'],  # Look at Beta
         'C4': walking_results['C4']['beta_energy'],
         'Cz': walking_results['Cz']['beta_energy']
     }
     
-    # Threshold'ları Beta enerjisine göre ayarla
+    # Adjust thresholds based on Beta energy
     processor.thresholds = {
         'C3': 0.8,
         'C4': 0.8,
@@ -349,16 +349,16 @@ def analyze_eeg_recordings():
     }
     
     command_triggered, electrodes = processor.detect_motor_command(electrode_energy_walking)
-    print(f"\n  Motor Komudu Tetiklendi: {command_triggered}")
+    print(f"\n  Motor Command Triggered: {command_triggered}")
     
     if command_triggered:
         joystick_cmd = processor.generate_joystick_command(electrodes)
-        print(f"  Tetiklenen Elektrotlar: {electrodes}")
-        print(f"  Joystick Komudu: {joystick_cmd}")
+        print(f"  Triggered Electrodes: {electrodes}")
+        print(f"  Joystick Command: {joystick_cmd}")
         processor.apply_joystick_command(joystick_cmd)
     
-    # KARŞILAŞTIRMA
-    print("\n[3] NORMAL vs YÜRÜRKEN KARŞILAŞTIRMASI")
+    # COMPARISON
+    print("\n[3] NORMAL vs WALKING COMPARISON")
     print("-" * 70)
     
     for electrode in ['C3', 'C4', 'Cz']:
@@ -369,15 +369,15 @@ def analyze_eeg_recordings():
                        / (normal_results[electrode]['beta_energy'] + 1e-6)) * 100
         
         print(f"\n  {electrode}:")
-        print(f"    Mu Değişimi:   {mu_change:+.2f}% (Baskılanma = negatif)")
-        print(f"    Beta Değişimi: {beta_change:+.2f}% (Aktivasyon = pozitif)")
+        print(f"    Mu Change:   {mu_change:+.2f}% (Suppression = negative)")
+        print(f"    Beta Change: {beta_change:+.2f}% (Activation = positive)")
     
-    # Görselleştirme
+    # Visualization
     plot_eeg_comparison(normal_eeg, walking_eeg, normal_results, walking_results)
 
 
 def plot_eeg_comparison(normal_eeg, walking_eeg, normal_results, walking_results):
-    """EEG kayıtlarını görselleştir"""
+    """Visualize the EEG recordings"""
     
     t_normal = normal_eeg['time']
     t_walking = walking_eeg['time']
@@ -393,23 +393,23 @@ def plot_eeg_comparison(normal_eeg, walking_eeg, normal_results, walking_results
         ax.grid(True, alpha=0.3)
         ax.set_xlim([0, 4])
         
-        # İstatistik
+        # Statistics
         mu_energy = normal_results[electrode]['mu_energy']
         beta_energy = normal_results[electrode]['beta_energy']
         ax.text(0.02, 0.95, f'Mu: {mu_energy:.4f}\nBeta: {beta_energy:.4f}',
                 transform=ax.transAxes, fontsize=9, verticalalignment='top',
                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
-    # Yürürken EEG
+    # Walking EEG
     for i, electrode in enumerate(['C3', 'C4', 'Cz']):
         ax = plt.subplot(3, 2, i*2 + 2)
         ax.plot(t_walking[:1000], walking_eeg[electrode][:1000], 'r-', linewidth=0.8, alpha=0.7)
         ax.set_ylabel(f'{electrode} (μV)', fontsize=10)
-        ax.set_title(f'Yürürken EEG - {electrode}', fontsize=11, fontweight='bold')
+        ax.set_title(f'Walking EEG - {electrode}', fontsize=11, fontweight='bold')
         ax.grid(True, alpha=0.3)
         ax.set_xlim([0, 4])
         
-        # İstatistik
+        # Statistics
         mu_energy = walking_results[electrode]['mu_energy']
         beta_energy = walking_results[electrode]['beta_energy']
         ax.text(0.02, 0.95, f'Mu: {mu_energy:.4f}\nBeta: {beta_energy:.4f}',
@@ -418,7 +418,7 @@ def plot_eeg_comparison(normal_eeg, walking_eeg, normal_results, walking_results
     
     plt.tight_layout()
     plt.savefig('C:\\EEG_Project\\eeg_normal_vs_walking.png', dpi=150, bbox_inches='tight')
-    print("\n[INFO] Grafik kaydedildi: C:\\EEG_Project\\eeg_normal_vs_walking.png")
+    print("\n[INFO] Chart saved: C:\\EEG_Project\\eeg_normal_vs_walking.png")
     plt.show()
 
 

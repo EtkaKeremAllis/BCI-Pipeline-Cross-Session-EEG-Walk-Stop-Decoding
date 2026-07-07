@@ -3,26 +3,27 @@ bci_pipeline_v2.6.py
 ====================
 EEG Walk/Stop BCI - v2.6
 
-Brief'teki kritik tasarım hatası düzeltmesi:
-  Training verisi (etiketli event pencereleri) != Prediction verisi (tüm
-  sürekli kayıt üzerinde sliding window) -> dağılım uyuşmazlığı -> collapse.
+Fix for the critical design flaw noted in the brief:
+  Training data (labeled event windows) != Prediction data (sliding window
+  over the entire continuous recording) -> distribution mismatch -> collapse.
 
-Bu dosya üç modu ayırır:
-  train             : etiketli event pencerelerinden model eğit, kaydet
-  validate_timeline : eğitilmiş modeli TAM etiketli oturumda sliding window
-                      ile test et, ground-truth timeline ile karşılaştır
-  predict           : etiketsiz ham EEG üzerinde inference (event gerekmez)
+This file separates three modes:
+  train             : train a model from labeled event windows, save it
+  validate_timeline : test the trained model with a sliding window over a
+                      FULLY labeled session, compare against the ground-truth timeline
+  predict           : inference on unlabeled raw EEG (no events required)
 
-Sınıflandırıcı DEĞİŞMEDİ: CSP + feature selection + shrinkage LDA
-(modern_bci_v2.py'den aynen reuse ediliyor). Yeni bir ML sınıflandırıcısı
-eklenmedi - sadece normalizasyon + IDLE gate + model persistence + doğru
-confidence tanımı eklendi.
+The classifier is UNCHANGED: CSP + feature selection + shrinkage LDA
+(reused as-is from modern_bci_v2.py). No new ML classifier was added -
+only normalization + an IDLE gate + model persistence + a correct
+confidence definition were added.
 
-Bilimsel dürüstlük notu: Bu sistem, önceden eğitilmiş bir modelle EEG'den
-Walk/Stop komut periyotlarını TAHMİN eder. Saf beyin-içi yürüme niyetinin
-kanıtlanmış decode'u DEĞİLDİR. Performans; eğitim verisine, artefaktlara,
-denek/oturum benzerliğine ve deployment koşullarına bağlıdır. Tek bir
-denek/oturumda eğitilen model başka bir denek/oturuma iyi genellemeyebilir.
+Scientific honesty note: This system PREDICTS Walk/Stop command periods
+from EEG using a pre-trained model. It is NOT a proven decode of pure
+in-brain walking intent. Performance depends on the training data,
+artifacts, subject/session similarity, and deployment conditions. A model
+trained on a single subject/session may not generalize well to another
+subject/session.
 """
 import argparse
 import json
@@ -36,12 +37,12 @@ from modern_bci_v2 import BCIConfig, ModernBCIPipeline, logger
 
 EPS = 1e-8
 LABEL_NAMES = {0: 'STOP', 1: 'WALK', 2: 'IDLE', -1: 'IGNORE'}
-COMMAND_LABEL_MAP = {'x5': 0, 'x8': 1}  # x5=STOP=0, x8=WALK=1. x99/diğerleri -> ignore
+COMMAND_LABEL_MAP = {'x5': 0, 'x8': 1}  # x5=STOP=0, x8=WALK=1. x99/others -> ignore
 
 
 # ============================================================================
-# CHANNEL SETS (CLI'dan kod değiştirmeden geniş motor-alan kanal setleri
-# denemek için)
+# CHANNEL SETS (to try broader motor-area channel sets from the CLI
+# without changing code)
 # ============================================================================
 
 CHANNEL_SETS = {
@@ -51,25 +52,25 @@ CHANNEL_SETS = {
     'motor13': ['FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'C3', 'C1', 'Cz', 'C2', 'C4',
                 'CP3', 'CPz', 'CP4'],
 }
-# all_eeg: bu alt string'lerden HERHANGİ birini adında içeren kanallar hariç
-# tutulur (case-insensitive).
+# all_eeg: channels whose name contains ANY of these substrings are
+# excluded (case-insensitive).
 _ALL_EEG_EXCLUDE_SUBSTRINGS = ['EOG', 'EMG', 'ECG', 'HEOG', 'VEOG', 'EXG',
                                'STATUS', 'TRIGGER', 'STIM']
 
 
 def resolve_channels(signals, channel_set):
     """
-    signals: read_edf() çıktısı (kanal adı -> 1D array sözlüğü).
+    signals: output of read_edf() (a dict of channel name -> 1D array).
     channel_set: 'motor3' | 'motor5' | 'motor9' | 'motor13' | 'all_eeg'
 
-    Döndürür: seçilen kanal adlarının listesi.
+    Returns: a list of the selected channel names.
 
-    motor3/5/9/13 için: sabit kanal listesi EDF'de eksiksiz bulunmalı -
-    eksik varsa AÇIKÇA hata verir (sessizce eksik bırakıp yanlış bir
-    model_info.json üretmek yerine).
+    For motor3/5/9/13: the fixed channel list must be fully present in the
+    EDF - if any are missing, this raises an EXPLICIT error (rather than
+    silently leaving them out and producing an incorrect model_info.json).
 
-    all_eeg için: EOG/EMG/ECG/... içeren kanallar hariç, EDF'deki TÜM
-    kanallar, EDF'deki orijinal sırayla.
+    For all_eeg: ALL channels in the EDF except those containing
+    EOG/EMG/ECG/..., in the EDF's original order.
     """
     if channel_set == 'all_eeg':
         selected = []
@@ -80,29 +81,29 @@ def resolve_channels(signals, channel_set):
             selected.append(ch)
         if not selected:
             raise SystemExit(
-                "channel_set=all_eeg: EOG/EMG/ECG/... dışında hiç kanal "
-                "bulunamadı - EDF kanal adlarını kontrol edin."
+                "channel_set=all_eeg: no channels found other than "
+                "EOG/EMG/ECG/... - check the EDF channel names."
             )
         return selected
 
     if channel_set not in CHANNEL_SETS:
         raise ValueError(
-            f"Bilinmeyen channel_set: {channel_set!r}. "
-            f"Geçerli seçenekler: {list(CHANNEL_SETS) + ['all_eeg']}"
+            f"Unknown channel_set: {channel_set!r}. "
+            f"Valid options: {list(CHANNEL_SETS) + ['all_eeg']}"
         )
 
     wanted = CHANNEL_SETS[channel_set]
     missing = [ch for ch in wanted if ch not in signals]
     if missing:
         raise SystemExit(
-            f"channel_set={channel_set} için gerekli kanal(lar) EDF'de yok: {missing}.\n"
-            f"EDF'deki mevcut kanallar: {list(signals.keys())}"
+            f"Channel(s) required for channel_set={channel_set} are missing from the EDF: {missing}.\n"
+            f"Channels present in the EDF: {list(signals.keys())}"
         )
     return list(wanted)
 
 
 # ============================================================================
-# FEATURE NAMES (deterministic sıra - kaydetmek için)
+# FEATURE NAMES (deterministic order - for saving)
 # ============================================================================
 
 STAT_FEATURE_NAMES = [
@@ -167,13 +168,13 @@ def apply_temporal_smoothing(raw_labels, window_size):
 
 
 # ============================================================================
-# SLIDING WINDOWS (deployment-style: tam kayıt üzerinde)
+# SLIDING WINDOWS (deployment-style: over the entire recording)
 # ============================================================================
 
 def build_sliding_windows(signal_len, fs, window_len=3.0, step_len=0.25):
     """
-    Tüm kayıt üzerinde overlapping sliding window'lar üretir (deployment-style).
-    Event-anchored, etiketli eğitim pencereleriyle KARIŞTIRILMAMALI.
+    Generates overlapping sliding windows over the entire recording (deployment-style).
+    Must NOT be confused with event-anchored, labeled training windows.
     """
     window_samples = int(window_len * fs)
     step_samples = int(step_len * fs)
@@ -191,9 +192,9 @@ def build_sliding_windows(signal_len, fs, window_len=3.0, step_len=0.25):
 
 def label_windows_from_events(windows, events, overlap_threshold=0.5):
     """
-    Ground-truth timeline etiketleme (SADECE validate_timeline kullanır).
-    events: (onset, duration, trial_type) listesi.
-    Dönen label: 0=STOP, 1=WALK, 2=IDLE (belirsiz/örtüşme yok)
+    Ground-truth timeline labeling (used ONLY by validate_timeline).
+    events: a list of (onset, duration, trial_type).
+    Returned label: 0=STOP, 1=WALK, 2=IDLE (no ambiguity/overlap)
     """
     x5_intervals = [(o, o + d) for o, d, t in events if t == 'x5']
     x8_intervals = [(o, o + d) for o, d, t in events if t == 'x8']
@@ -215,15 +216,15 @@ def label_windows_from_events(windows, events, overlap_threshold=0.5):
         elif frac5 >= overlap_threshold and frac5 > frac8:
             labels.append(0)
         else:
-            labels.append(2)  # IDLE (belirsiz/event dışı)
+            labels.append(2)  # IDLE (ambiguous/outside any event)
     return np.array(labels)
 
 
 def extract_command_training_windows(events, fs, skip_start=1.0, skip_end=1.0, window_len=3.0):
     """
-    Eğitim için event-ANKORLU, non-overlapping pencereler (x5/x8 SADECE).
-    Bu, deployment sliding window'undan FARKLI ve BİLE İSTEYEREK öyle -
-    eğitim verisi hep etiketli command aralığından gelir.
+    Event-ANCHORED, non-overlapping windows for training (x5/x8 ONLY).
+    This is DIFFERENT from the deployment sliding window, and INTENTIONALLY
+    so - the training data always comes from a labeled command interval.
     """
     windows = []
     for onset, duration, trial_type in events:
@@ -243,15 +244,15 @@ def extract_command_training_windows(events, fs, skip_start=1.0, skip_end=1.0, w
 
 
 # ============================================================================
-# DEPLOYABLE MODEL: ModernBCIPipeline sarmalayıcısı + normalizasyon + IDLE gate
+# DEPLOYABLE MODEL: wraps ModernBCIPipeline + normalization + IDLE gate
 # ============================================================================
 
 class DeployableBCIModel:
     """
     CSP + feature selection + shrinkage LDA (modern_bci_v2.ModernBCIPipeline)
-    + feature normalizasyonu + IDLE gate + model persistence.
+    + feature normalization + IDLE gate + model persistence.
 
-    Yeni bir ML sınıflandırıcı YOK - sadece deployment için gerekli sarmalayıcı.
+    No new ML classifier - just the wrapper needed for deployment.
     """
 
     def __init__(self, channels, sampling_rate, bandpass_low=0.5, bandpass_high=45,
@@ -261,7 +262,7 @@ class DeployableBCIModel:
                  confidence_threshold=0.6, idle_distance_threshold=3.5,
                  channel_set=None):
         self.channels = list(channels)
-        self.channel_set = channel_set  # sadece bilgi amaçlı - seçim mantığı zaten resolve_channels()'ta yapıldı
+        self.channel_set = channel_set  # for information only - selection logic already happened in resolve_channels()
         self.sampling_rate = sampling_rate
         self.window_len = window_len
         self.step_len = step_len
@@ -278,7 +279,7 @@ class DeployableBCIModel:
         )
         self.pipeline = ModernBCIPipeline(self.config)
 
-        # Fit sonrası doldurulacak:
+        # To be filled in after fit:
         self.feature_mean = None
         self.feature_std = None
         self.command_feature_mean = None
@@ -287,7 +288,7 @@ class DeployableBCIModel:
         self.n_csp_filters = self.config.csp_n_filters if use_csp else 0
 
     def preprocess_continuous(self, raw_signals):
-        """Tam sürekli kaydı BİR KEZ preprocess et (per-window değil)."""
+        """Preprocess the entire continuous recording ONCE (not per-window)."""
         return self.pipeline.preprocess({ch: raw_signals[ch] for ch in self.channels})
 
     def _epoch_dict(self, preprocessed, start_idx, end_idx):
@@ -295,8 +296,8 @@ class DeployableBCIModel:
 
     def train(self, preprocessed_continuous, train_windows):
         """
-        preprocessed_continuous: preprocess_continuous() çıktısı
-        train_windows: extract_command_training_windows() çıktısı (label ile)
+        preprocessed_continuous: output of preprocess_continuous()
+        train_windows: output of extract_command_training_windows() (with labels)
         """
         raw_trials = [self._epoch_dict(preprocessed_continuous, w['start_idx'], w['end_idx'])
                       for w in train_windows]
@@ -305,33 +306,34 @@ class DeployableBCIModel:
 
     def train_from_trials(self, raw_trials, y):
         """
-        Tek-oturum train()'in ortak çekirdeği - ama artık DOĞRUDAN epoch
-        edilmiş raw_trials (eeg_dict listesi) + y alır, tek bir sürekli
-        kayıttaki index'lere bağımlı değil. Bu, çoklu-oturum havuzlama
-        (train_multi) için gerekli: her oturum KENDİ sürekli kaydında
-        ayrı ayrı preprocess+epoch edilir, sonra epoch SÖZLÜKLERİ
-        (artık zaman index'i taşımayan bağımsız diziler) tek listede
-        havuzlanıp buraya verilir.
+        The common core of single-session train() - but now takes
+        already-epoched raw_trials (a list of eeg_dicts) + y directly,
+        without depending on indices into a single continuous recording.
+        This is needed for multi-session pooling (train_multi): each
+        session is preprocessed+epoched SEPARATELY on its own continuous
+        recording, and then the epoch DICTS (now independent arrays that
+        no longer carry a time index) are pooled into a single list and
+        passed in here.
         """
         y = np.asarray(y)
 
-        # 1) CSP fit + feature selection fit + (throwaway) ilk classifier fit
+        # 1) CSP fit + feature selection fit + (throwaway) initial classifier fit
         self.pipeline.train(raw_trials, y)
 
-        # 2) Şimdi CSP + feature_selector fit edildi -> seçili feature'ları
-        #    (ham ölçekte) tüm eğitim pencereleri için çıkar
+        # 2) CSP + feature_selector are now fitted -> extract the selected
+        #    features (at raw scale) for all training windows
         X_raw = np.array([self.pipeline.extract_full_features(t) for t in raw_trials])
         X_sel_raw = self.pipeline.feature_selector.transform(X_raw)
 
-        # 3) Normalizasyon istatistikleri (seçili feature uzayında)
+        # 3) Normalization statistics (in the selected feature space)
         self.feature_mean = X_sel_raw.mean(axis=0)
         self.feature_std = X_sel_raw.std(axis=0) + EPS
         X_sel_norm = (X_sel_raw - self.feature_mean) / self.feature_std
 
-        # 4) Classifier'ı NORMALİZE edilmiş feature'larla yeniden eğit
+        # 4) Re-train the classifier with the NORMALIZED features
         self.pipeline.classifier.fit(X_sel_norm, y)
 
-        # 5) IDLE gate referans dağılımı (command-window feature dağılımı)
+        # 5) IDLE gate reference distribution (command-window feature distribution)
         self.command_feature_mean = X_sel_norm.mean(axis=0)
         self.command_feature_std = X_sel_norm.std(axis=0) + EPS
 
@@ -345,8 +347,8 @@ class DeployableBCIModel:
 
     def predict_window(self, preprocessed_continuous, start_idx, end_idx):
         """
-        Tek pencere için: IDLE gate -> (geçerse) LDA -> düzeltilmiş confidence.
-        Dönen: (label:int[0/1/2], confidence:float veya None, z_distance:float, raw_pred_or_None)
+        For a single window: IDLE gate -> (if passed) LDA -> corrected confidence.
+        Returns: (label:int[0/1/2], confidence:float or None, z_distance:float, raw_pred_or_None)
         """
         epoch = self._epoch_dict(preprocessed_continuous, start_idx, end_idx)
         x_raw = self.pipeline.extract_full_features(epoch).reshape(1, -1)
@@ -358,15 +360,15 @@ class DeployableBCIModel:
         )))
 
         if z_distance > self.idle_distance_threshold:
-            return 2, None, z_distance, None  # IDLE gate tetiklendi
+            return 2, None, z_distance, None  # IDLE gate triggered
 
         proba = self.pipeline.classifier.predict_proba(x_sel_norm.reshape(1, -1))[0]
         pred = int(self.pipeline.classifier.predict(x_sel_norm.reshape(1, -1))[0])
-        # DÜZELTME: confidence = P(tahmin edilen sınıf), her zaman P(WALK) değil
+        # FIX: confidence = P(predicted class), not always P(WALK)
         confidence = float(proba[pred])
 
         if confidence < self.confidence_threshold:
-            return 2, confidence, z_distance, pred  # düşük güven -> IDLE
+            return 2, confidence, z_distance, pred  # low confidence -> IDLE
 
         label = 1 if pred == 1 else 0
         return label, confidence, z_distance, pred
@@ -438,13 +440,13 @@ class DeployableBCIModel:
             window_len=info['window_len'], step_len=info['step_len'],
             confidence_threshold=info['confidence_threshold'],
             idle_distance_threshold=info['idle_distance_threshold'],
-            # Backward compatible: eski modellerde bu alan yok -> None
-            # (channels listesinin kendisi zaten doğru şekilde yüklendi,
-            # channel_set sadece hangi preset'ten geldiğinin bilgisidir).
+            # Backward compatible: older models don't have this field -> None
+            # (the channels list itself is already loaded correctly;
+            # channel_set is just metadata about which preset it came from).
             channel_set=info.get('channel_set'),
         )
 
-        # Fit edilmiş durumu geri yükle (CSP, feature_selector, classifier)
+        # Restore the fitted state (CSP, feature_selector, classifier)
         model.pipeline.classifier.coef = arrs['lda_coef']
         model.pipeline.classifier.intercept = arrs['lda_intercept']
         model.pipeline.classifier.mean_0 = arrs['lda_mean_0']
@@ -471,15 +473,15 @@ class DeployableBCIModel:
 
 def downsample_classes(items, y, seed=42):
     """
-    Çoğunluk sınıfı (genelde STOP), azınlık sınıfın (genelde WALK) sayısına
-    reproducible şekilde (seed'li) rastgele indirger.
+    Randomly downsamples the majority class (usually STOP) to the count of
+    the minority class (usually WALK), reproducibly (via a seed).
 
-    items: y ile aynı sırada herhangi bir liste (window dict'leri VEYA
-           zaten-epoch-edilmiş eeg_dict'leri olabilir - içeriğine bakmaz).
-    y:     items ile aynı uzunlukta 0/1 etiket dizisi.
+    items: any list in the same order as y (can be window dicts OR
+           already-epoched eeg_dicts - the content doesn't matter).
+    y:     a 0/1 label array the same length as items.
 
-    Döndürür: (items_balanced, y_balanced, stats)
-    stats: kept/dropped sayıları + seed (training_summary.txt'ye yazılacak).
+    Returns: (items_balanced, y_balanced, stats)
+    stats: kept/dropped counts + seed (to be written to training_summary.txt).
     """
     y = np.asarray(y)
     idx_stop = np.where(y == 0)[0]
@@ -487,8 +489,8 @@ def downsample_classes(items, y, seed=42):
     n_stop_before, n_walk_before = len(idx_stop), len(idx_walk)
 
     if n_stop_before == 0 or n_walk_before == 0:
-        logger.warning("downsample_classes: bir sınıf tamamen yok (STOP=%d, WALK=%d) - "
-                        "dengeleme atlanıyor.", n_stop_before, n_walk_before)
+        logger.warning("downsample_classes: one class is entirely absent (STOP=%d, WALK=%d) - "
+                        "skipping balancing.", n_stop_before, n_walk_before)
         stats = {
             'method': 'downsample', 'applied': False, 'seed': seed,
             'n_stop_before': n_stop_before, 'n_walk_before': n_walk_before,
@@ -523,8 +525,8 @@ def downsample_classes(items, y, seed=42):
 def apply_class_balancing(items, y, balance_classes, seed):
     """
     balance_classes: 'none' | 'downsample' | 'class_weight'
-    'class_weight' henüz implement edilmedi - açıkça hata verir (sessizce
-    yoksayıp yanlış izlenim vermek yerine).
+    'class_weight' is not yet implemented - raises an explicit error
+    (rather than silently ignoring it and giving a false impression).
     """
     if balance_classes == 'none':
         y = np.asarray(y)
@@ -538,11 +540,11 @@ def apply_class_balancing(items, y, balance_classes, seed):
         return downsample_classes(items, y, seed=seed)
     elif balance_classes == 'class_weight':
         raise NotImplementedError(
-            "--balance-classes class_weight henüz implement edilmedi. "
-            "Şimdilik --balance-classes downsample kullanın."
+            "--balance-classes class_weight is not yet implemented. "
+            "Use --balance-classes downsample for now."
         )
     else:
-        raise ValueError(f"Bilinmeyen balance_classes değeri: {balance_classes}")
+        raise ValueError(f"Unknown balance_classes value: {balance_classes}")
 
 
 def _format_balance_stats(stats):
@@ -558,9 +560,9 @@ def _format_balance_stats(stats):
 
 def summarize_subjects(trials, labels, seed=42, method='none', applied=False, target_per_subject=None):
     """
-    train_multi için subject/session provenance taşıyan trial dict'lerinden
-    subject bazlı sayım çıkarır. trials elemanları en azından subject anahtarı
-    taşır; labels aynı sıradaki 0/1 etiketlerdir.
+    Derives per-subject counts from trial dicts carrying subject/session
+    provenance, for train_multi. trials elements carry at least a subject
+    key; labels are the 0/1 labels in the same order.
     """
     import collections
     labels = np.asarray(labels)
@@ -592,8 +594,9 @@ def summarize_subjects(trials, labels, seed=42, method='none', applied=False, ta
 
 def downsample_subjects(trials, labels, seed=42):
     """
-    Her subject aynı sayıda trial katkısı yapsın diye subject-level downsample.
-    Class balancing değildir; STOP/WALK dengesini ayrıca --balance-classes yönetir.
+    Subject-level downsample so each subject contributes the same number of
+    trials. This is not class balancing; the STOP/WALK balance is handled
+    separately by --balance-classes.
     """
     import collections
     rng = np.random.default_rng(seed)
@@ -654,7 +657,7 @@ def apply_subject_balancing(trials, labels, balance_subjects, seed=42):
         )
     if balance_subjects == 'downsample':
         return downsample_subjects(trials, labels, seed=seed)
-    raise ValueError(f"Bilinmeyen balance_subjects değeri: {balance_subjects}")
+    raise ValueError(f"Unknown balance_subjects value: {balance_subjects}")
 
 
 def _format_subject_balance_stats(stats):
@@ -680,7 +683,7 @@ def _format_subject_balance_stats(stats):
 
 
 def _json_default(o):
-    """json.dump için numpy ve NaN uyumlu küçük dönüştürücü."""
+    """A small numpy- and NaN-compatible converter for json.dump."""
     if isinstance(o, (np.integer,)):
         return int(o)
     if isinstance(o, (np.floating, float)):
@@ -713,11 +716,11 @@ def run_train(edf_path, events_path, output_dir, channel_set='motor3',
     events = [(o, d, t) for o, d, t in events_all if t in COMMAND_LABEL_MAP]
     dropped = [(o, d, t) for o, d, t in events_all if t not in COMMAND_LABEL_MAP]
     if dropped:
-        print(f"[*] {len(dropped)} event x5/x8 dışında, atlandı (örn: {dropped[:3]})")
+        print(f"[*] {len(dropped)} events outside x5/x8, skipped (e.g.: {dropped[:3]})")
 
     fs = info['sampling_rate'][channels[0]]
-    print(f"[*] EDF: {len(signals[channels[0]])} örnek @ {fs:.0f}Hz")
-    print(f"[*] Events: {len(events)} kullanılabilir (x5/x8)")
+    print(f"[*] EDF: {len(signals[channels[0]])} samples @ {fs:.0f}Hz")
+    print(f"[*] Events: {len(events)} usable (x5/x8)")
 
     model = DeployableBCIModel(
         channels=channels, sampling_rate=fs, window_len=window_len, step_len=step_len,
@@ -729,8 +732,8 @@ def run_train(edf_path, events_path, output_dir, channel_set='motor3',
 
     preprocessed = model.preprocess_continuous(signals)
     train_windows = extract_command_training_windows(events, fs, window_len=window_len)
-    print(f"[*] {len(train_windows)} eğitim penceresi çıkarıldı "
-          f"(event-ankorlu, non-overlapping, {window_len}s)")
+    print(f"[*] Extracted {len(train_windows)} training windows "
+          f"(event-anchored, non-overlapping, {window_len}s)")
 
     labels_arr = np.array([w['label'] for w in train_windows])
     train_windows, _, balance_stats = apply_class_balancing(
@@ -743,8 +746,8 @@ def run_train(edf_path, events_path, output_dir, channel_set='motor3',
               f"dropped={balance_stats['n_dropped']} (seed={balance_stats['seed']})")
 
     stats = model.train(preprocessed, train_windows)
-    print(f"[+] Eğitim tamamlandı: STOP={stats['n_stop']}, WALK={stats['n_walk']}")
-    print(f"[+] Seçili feature indeksleri: {stats['selected_feature_idx']}")
+    print(f"[+] Training complete: STOP={stats['n_stop']}, WALK={stats['n_walk']}")
+    print(f"[+] Selected feature indices: {stats['selected_feature_idx']}")
 
     info_saved = model.save(output_dir)
     with open(os.path.join(output_dir, 'training_summary.txt'), 'w') as f:
@@ -761,22 +764,23 @@ def run_train(edf_path, events_path, output_dir, channel_set='motor3',
         f.write(f"idle_distance_threshold: {idle_distance_threshold}, "
                 f"confidence_threshold: {confidence_threshold}\n\n")
         f.write(_format_balance_stats(balance_stats) + "\n\n")
-        f.write("BILIMSEL DURUSTLUK: Bu model onceden egitilmis bir modelle EEG'den\n")
-        f.write("Walk/Stop komut periyotlarini tahmin eder. Saf beyin-ici yurume\n")
-        f.write("niyetinin kanitlanmis decode'u degildir. Performans egitim verisine,\n")
-        f.write("artefaktlara, denek/oturum benzerligine baglidir.\n")
+        f.write("SCIENTIFIC HONESTY: This model predicts Walk/Stop command periods\n")
+        f.write("from EEG using a pre-trained model. It is not a proven decode of\n")
+        f.write("pure in-brain walking intent. Performance depends on the training\n")
+        f.write("data, artifacts, and subject/session similarity.\n")
 
-    print(f"[+] Model kaydedildi: {output_dir}/")
+    print(f"[+] Model saved: {output_dir}/")
     return model, signals, info, events
 
 
 # ============================================================================
-# MODE: train_multi (çoklu oturum havuzlama)
+# MODE: train_multi (multi-session pooling)
 # ============================================================================
 
 def _resolve_path(path, dataset_dir):
-    """CSV'deki dosya adı bağıl ise dataset_dir ile birleştir; zaten
-    çözülebiliyorsa (mutlak yol veya CWD'de mevcut) olduğu gibi kullan."""
+    """If the file name in the CSV is relative, join it with dataset_dir;
+    if it's already resolvable (an absolute path or present in the CWD),
+    use it as-is."""
     if os.path.isabs(path) and os.path.exists(path):
         return path
     if os.path.exists(path):
@@ -784,7 +788,7 @@ def _resolve_path(path, dataset_dir):
     joined = os.path.join(dataset_dir, path)
     if os.path.exists(joined):
         return joined
-    return path  # var olmasa da döndür - çağıran taraf hata versin, açıkça
+    return path  # return even if it doesn't exist - let the caller raise an explicit error
 
 
 def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
@@ -793,15 +797,15 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
                      n_features_select=5, lda_shrinkage=0.0,
                      balance_classes='none', balance_subjects='none', seed=42):
     """
-    Birden fazla (subject, session) kaydını AYRI AYRI preprocess edip,
-    SADECE etiketli command pencerelerini havuzlayarak TEK bir
-    DeployableBCIModel eğitir.
+    Preprocesses multiple (subject, session) recordings SEPARATELY, then
+    trains a SINGLE DeployableBCIModel by pooling ONLY the labeled command
+    windows.
 
-    Ek güvenlik:
-      - Her trial subject/session provenance ile taşınır.
-      - --balance-subjects downsample ile her subject aynı sayıda trial verir.
-      - train_manifest_resolved.csv: balancing öncesi tüm aday pencereler.
-      - train_manifest_used.csv: gerçekten eğitime giren pencereler.
+    Extra safety:
+      - Every trial carries subject/session provenance.
+      - --balance-subjects downsample makes each subject contribute the same number of trials.
+      - train_manifest_resolved.csv: all candidate windows before balancing.
+      - train_manifest_used.csv: the windows that actually went into training.
     """
     import csv as csv_mod
 
@@ -812,21 +816,21 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
     with open(dataset_list_csv, newline='') as f:
         rows = list(csv_mod.DictReader(f))
     if not rows:
-        raise SystemExit(f"{dataset_list_csv} boş veya okunamadı")
+        raise SystemExit(f"{dataset_list_csv} is empty or could not be read")
 
     required_cols = {'subject', 'session', 'edf', 'events'}
     missing_cols = required_cols - set(rows[0].keys())
     if missing_cols:
-        raise SystemExit(f"dataset-list CSV eksik kolon(lar): {missing_cols}")
+        raise SystemExit(f"dataset-list CSV is missing column(s): {missing_cols}")
 
-    print(f"[*] {len(rows)} (subject, session) satırı bulundu: {dataset_list_csv}")
+    print(f"[*] Found {len(rows)} (subject, session) rows: {dataset_list_csv}")
 
     pooled_trials = []  # dict: epoch + provenance
     pooled_labels = []
     manifest_rows = []
     per_file_stats = []
     fs_reference = None
-    channels = None  # channel_set'ten İLK başarılı dosyada çözülecek, sonra sabit
+    channels = None  # resolved from channel_set on the FIRST successful file, then fixed
     skipped_files = []
 
     for row in rows:
@@ -836,25 +840,26 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
         tag = f"{subject}/{session}"
 
         if not os.path.exists(edf_path):
-            print(f"[!] ATLANDI [{tag}]: EDF bulunamadı -> {edf_path}")
+            print(f"[!] SKIPPED [{tag}]: EDF not found -> {edf_path}")
             skipped_files.append((tag, 'edf_missing', edf_path))
             continue
         if not os.path.exists(events_path):
-            print(f"[!] ATLANDI [{tag}]: events dosyası bulunamadı -> {events_path}")
+            print(f"[!] SKIPPED [{tag}]: events file not found -> {events_path}")
             skipped_files.append((tag, 'events_missing', events_path))
             continue
 
         signals, info = read_edf(edf_path)
 
         if channels is None:
-            # channel_set'i İLK başarıyla okunan dosyanın EDF kanal adlarına
-            # göre çöz - sonraki tüm dosyalar bu SABİT listeyle kontrol edilir.
+            # Resolve channel_set based on the EDF channel names of the FIRST
+            # successfully read file - all subsequent files are checked against
+            # this FIXED list.
             channels = resolve_channels(signals, channel_set)
             print(f"[*] Channel set {channel_set}: {len(channels)} channels -> {channels}")
 
         missing_channels = [ch for ch in channels if ch not in signals]
         if missing_channels:
-            print(f"[!] ATLANDI [{tag}]: eksik kanal(lar) {missing_channels}")
+            print(f"[!] SKIPPED [{tag}]: missing channel(s) {missing_channels}")
             skipped_files.append((tag, f'missing_channels:{missing_channels}', edf_path))
             continue
 
@@ -862,20 +867,20 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
         if fs_reference is None:
             fs_reference = fs
         elif abs(fs - fs_reference) > 1e-6:
-            print(f"[!] ATLANDI [{tag}]: sampling rate uyuşmuyor "
-                  f"({fs}Hz != referans {fs_reference}Hz) - tek modelde birleştirilemez.")
+            print(f"[!] SKIPPED [{tag}]: sampling rate mismatch "
+                  f"({fs}Hz != reference {fs_reference}Hz) - cannot combine into a single model.")
             skipped_files.append((tag, f'fs_mismatch:{fs}!={fs_reference}', edf_path))
             continue
 
         try:
             events_all = parse_events(events_path)
         except Exception as e:
-            print(f"[!] ATLANDI [{tag}]: events okunamadı ({e})")
+            print(f"[!] SKIPPED [{tag}]: could not read events ({e})")
             skipped_files.append((tag, f'events_parse_error:{e}', events_path))
             continue
         events = [(o, d, t) for o, d, t in events_all if t in COMMAND_LABEL_MAP]
         if not events:
-            print(f"[!] ATLANDI [{tag}]: kullanılabilir x5/x8 event yok")
+            print(f"[!] SKIPPED [{tag}]: no usable x5/x8 events")
             skipped_files.append((tag, 'no_usable_events', events_path))
             continue
 
@@ -891,15 +896,15 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
         file_windows = extract_command_training_windows(events, fs, window_len=window_len)
         n_stop_file = sum(1 for w in file_windows if w['label'] == 0)
         n_walk_file = sum(1 for w in file_windows if w['label'] == 1)
-        print(f"[+] [{tag}] {len(file_windows)} pencere (STOP={n_stop_file}, WALK={n_walk_file})")
+        print(f"[+] [{tag}] {len(file_windows)} windows (STOP={n_stop_file}, WALK={n_walk_file})")
         per_file_stats.append({
             'subject': subject, 'session': session, 'edf': edf_path, 'events': events_path,
             'n_windows': len(file_windows), 'n_stop': n_stop_file, 'n_walk': n_walk_file,
         })
 
         if n_stop_file == 0 or n_walk_file == 0:
-            print(f"[!] UYARI [{tag}]: bir sınıf tamamen yok (STOP={n_stop_file}, WALK={n_walk_file}) "
-                  f"- bu dosya tek başına ayrım öğretemez, sadece havuza katkı sağlar.")
+            print(f"[!] WARNING [{tag}]: one class is entirely absent (STOP={n_stop_file}, WALK={n_walk_file}) "
+                  f"- this file alone can't teach the distinction, it only contributes to the pool.")
 
         for w in file_windows:
             epoch = temp_model._epoch_dict(preprocessed, w['start_idx'], w['end_idx'])
@@ -925,8 +930,8 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
             })
 
     if fs_reference is None or len(pooled_trials) == 0:
-        raise SystemExit("Hiçbir dosya kullanılamadı - train_multi için havuzlanacak pencere yok. "
-                         "Yukarıdaki [!] ATLANDI satırlarına bakın.")
+        raise SystemExit("No file could be used - there are no windows to pool for train_multi. "
+                         "See the [!] SKIPPED lines above.")
 
     os.makedirs(output_dir, exist_ok=True)
     manifest_path = os.path.join(output_dir, 'train_manifest_resolved.csv')
@@ -942,25 +947,25 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
     y_pooled = np.asarray(pooled_labels)
     n_stop_candidate = int(np.sum(y_pooled == 0))
     n_walk_candidate = int(np.sum(y_pooled == 1))
-    print(f"\n[*] Toplam aday eğitim penceresi: {len(pooled_trials)} "
-          f"(STOP={n_stop_candidate}, WALK={n_walk_candidate}) - {len(per_file_stats)} dosyadan, "
-          f"{len(skipped_files)} dosya atlandı")
-    print(f"[+] Aday manifest yazıldı: {manifest_path}")
+    print(f"\n[*] Total candidate training windows: {len(pooled_trials)} "
+          f"(STOP={n_stop_candidate}, WALK={n_walk_candidate}) - from {len(per_file_stats)} files, "
+          f"{len(skipped_files)} files skipped")
+    print(f"[+] Candidate manifest written: {manifest_path}")
 
     imbalance_ratio_candidate = max(n_stop_candidate, n_walk_candidate) / max(min(n_stop_candidate, n_walk_candidate), 1)
     if imbalance_ratio_candidate >= 3.0:
-        print(f"[!] UYARI: ciddi sınıf dengesizliği - oran {imbalance_ratio_candidate:.1f}:1 "
-              f"(STOP={n_stop_candidate}, WALK={n_walk_candidate}). Model çoğunluk sınıfa yatkın olabilir.")
+        print(f"[!] WARNING: severe class imbalance - ratio {imbalance_ratio_candidate:.1f}:1 "
+              f"(STOP={n_stop_candidate}, WALK={n_walk_candidate}). The model may be biased toward the majority class.")
 
-    # 1) Subject balancing: sub-01 iki session ile havuzu domine etmesin.
+    # 1) Subject balancing: don't let sub-01 dominate the pool with two sessions.
     pooled_trials, y_pooled, subject_balance_stats = apply_subject_balancing(
         pooled_trials, y_pooled, balance_subjects, seed=seed
     )
     if subject_balance_stats['applied']:
         print(f"[*] Subject balancing ({subject_balance_stats['method']}): "
-              f"target={subject_balance_stats['target_per_subject']} trial/subject (seed={seed})")
+              f"target={subject_balance_stats['target_per_subject']} trials/subject (seed={seed})")
 
-    # 2) Class balancing: STOP/WALK dengesini ayrıca yönet.
+    # 2) Class balancing: handle the STOP/WALK balance separately.
     pooled_trials, y_pooled, class_balance_stats = apply_class_balancing(
         pooled_trials, y_pooled, balance_classes, seed
     )
@@ -970,7 +975,7 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
               f"WALK {class_balance_stats['n_walk_before']}->{class_balance_stats['n_walk_after']}, "
               f"dropped={class_balance_stats['n_dropped']} (seed={class_balance_stats['seed']})")
 
-    # Class balancing subject dağılımını yeniden değiştirebilir; final subject özetini de kaydet.
+    # Class balancing can change the subject distribution again; also save the final subject summary.
     final_subject_stats = summarize_subjects(
         pooled_trials, y_pooled, seed=seed, method='final_after_all_balancing', applied=False
     )
@@ -995,9 +1000,9 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
     raw_trials = [t['epoch'] for t in pooled_trials]
     n_stop_final = int(np.sum(y_pooled == 0))
     n_walk_final = int(np.sum(y_pooled == 1))
-    print(f"[*] Eğitime girecek final pencere sayısı: {len(raw_trials)} "
+    print(f"[*] Final number of windows going into training: {len(raw_trials)} "
           f"(STOP={n_stop_final}, WALK={n_walk_final})")
-    print(f"[+] Kullanılan manifest yazıldı: {used_manifest_path}")
+    print(f"[+] Used manifest written: {used_manifest_path}")
 
     model = DeployableBCIModel(
         channels=channels, sampling_rate=fs_reference, window_len=window_len, step_len=step_len,
@@ -1007,8 +1012,8 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
         channel_set=channel_set,
     )
     stats = model.train_from_trials(raw_trials, y_pooled)
-    print(f"\n[+] Havuzlanmış eğitim tamamlandı: STOP={stats['n_stop']}, WALK={stats['n_walk']}")
-    print(f"[+] Seçili feature indeksleri: {stats['selected_feature_idx']}")
+    print(f"\n[+] Pooled training complete: STOP={stats['n_stop']}, WALK={stats['n_walk']}")
+    print(f"[+] Selected feature indices: {stats['selected_feature_idx']}")
 
     info_saved = model.save(output_dir)
 
@@ -1045,15 +1050,15 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
         f.write("IMPORTANT: Continuous EEG signals were NEVER concatenated across sessions.\n")
         f.write("Each recording was preprocessed independently; only already-epoched\n")
         f.write("(labeled command-window) trials were pooled before training.\n\n")
-        f.write("BILIMSEL DURUSTLUK: Bu model onceden egitilmis bir modelle EEG'den\n")
-        f.write("Walk/Stop komut periyotlarini tahmin eder. Saf beyin-ici yurume\n")
-        f.write("niyetinin kanitlanmis decode'u degildir. Cok-oturum havuzlama modelin\n")
-        f.write("BIR oturuma asiri uyum saglama riskini azaltmaya calisir, ama bu\n")
-        f.write("validate_timeline sonuclariyla ayrica dogrulanmadan capraz-denek/\n")
-        f.write("oturum genelleme iddia edilemez.\n")
+        f.write("SCIENTIFIC HONESTY: This model predicts Walk/Stop command periods\n")
+        f.write("from EEG using a pre-trained model. It is not a proven decode of\n")
+        f.write("pure in-brain walking intent. Multi-session pooling tries to reduce\n")
+        f.write("the risk of the model overfitting to A SINGLE session, but\n")
+        f.write("cross-subject/session generalization cannot be claimed without\n")
+        f.write("separately verifying it with validate_timeline results.\n")
 
-    print(f"\n[+] Model kaydedildi: {output_dir}/")
-    print(f"[+] Provenance: {manifest_path} (aday), {used_manifest_path} (final kullanılan)")
+    print(f"\n[+] Model saved: {output_dir}/")
+    print(f"[+] Provenance: {manifest_path} (candidate), {used_manifest_path} (final used)")
     return model, per_file_stats, skipped_files
 
 
@@ -1067,18 +1072,18 @@ def _prediction_counts(y_pred):
 
 
 def _predict_full_record(edf_path, model):
-    """Model + tek EDF için tam kayıt üzerinde sliding-window prediction üretir."""
+    """Generates sliding-window predictions over the entire recording for a model + single EDF."""
     signals, info = read_edf(edf_path)
 
     missing_channels = [ch for ch in model.channels if ch not in signals]
     if missing_channels:
-        raise SystemExit(f"EDF içinde modelin beklediği kanal(lar) yok: {missing_channels}")
+        raise SystemExit(f"Channel(s) the model expects are missing from the EDF: {missing_channels}")
 
     edf_fs = info['sampling_rate'][model.channels[0]]
     if abs(edf_fs - model.sampling_rate) > 1e-6:
         raise SystemExit(
-            f"Sampling rate uyuşmuyor: EDF {edf_fs}Hz, model {model.sampling_rate}Hz. "
-            "Aynı sampling rate ile eğitilmiş model kullanın."
+            f"Sampling rate mismatch: EDF {edf_fs}Hz, model {model.sampling_rate}Hz. "
+            "Use a model trained with the same sampling rate."
         )
 
     preprocessed = model.preprocess_continuous(signals)
@@ -1113,11 +1118,11 @@ def _write_prediction_outputs(rows, meta, output_dir,
                               timeline_csv_name='predicted_timeline.csv',
                               summary_json_name='prediction_summary.json',
                               smoothing_window=3):
-    """Etiketsiz prediction CSV + özet JSON + collapse raporu yazar.
+    """Writes an unlabeled prediction CSV + summary JSON + collapse report.
 
-    Accuracy hesaplamaz. CSV hem raw hem smoothed prediction içerir.
-    raw_predicted_label = IDLE gate + confidence threshold sonrası ham pencere etiketi.
-    smoothed_predicted_label = temporal smoothing sonrası etiket.
+    Does not compute accuracy. The CSV contains both raw and smoothed predictions.
+    raw_predicted_label = the raw window label after the IDLE gate + confidence threshold.
+    smoothed_predicted_label = the label after temporal smoothing.
     """
     import csv
     os.makedirs(output_dir, exist_ok=True)
@@ -1220,8 +1225,8 @@ def run_unlabeled_prediction(edf_path, model_dir, output_dir,
 
     model = DeployableBCIModel.load(model_dir)
     rows, meta = _predict_full_record(edf_path, model)
-    print(f"[*] {len(rows)} sliding window oluşturuldu "
-          f"(window={model.window_len}s, step={model.step_len}s, tam kayıt üzerinde)")
+    print(f"[*] Generated {len(rows)} sliding windows "
+          f"(window={model.window_len}s, step={model.step_len}s, over the entire recording)")
     print(f"[*] Temporal smoothing window: {smoothing_window} "
           f"({'no smoothing' if smoothing_window == 1 else 'centered majority vote'})")
 
@@ -1232,24 +1237,24 @@ def run_unlabeled_prediction(edf_path, model_dir, output_dir,
         smoothing_window=smoothing_window,
     )
 
-    print(f"\n[+] RAW prediction dağılımı: {summary['raw']['prediction_counts']}")
-    print(f"[+] SMOOTHED prediction dağılımı: {summary['smoothed']['prediction_counts']}")
+    print(f"\n[+] RAW prediction distribution: {summary['raw']['prediction_counts']}")
+    print(f"[+] SMOOTHED prediction distribution: {summary['smoothed']['prediction_counts']}")
     print("[+] No ground-truth events were provided.")
     print("[+] Raw and smoothed predictions saved.")
     print("[+] Accuracy cannot be computed.")
     if summary['smoothed']['collapse_warning']:
         print(f"[!!!] SMOOTHED COLLAPSE WARNING: dominant prediction = "
-              f"{summary['smoothed']['dominant_prediction_fraction']:.1%} veya WALK count = 0.")
+              f"{summary['smoothed']['dominant_prediction_fraction']:.1%} or WALK count = 0.")
     else:
-        print(f"[+] Collapse yok - smoothed dominant prediction "
+        print(f"[+] No collapse - smoothed dominant prediction "
               f"{summary['smoothed']['dominant_prediction_fraction']:.1%} (<90%), WALK count>0.")
-    print(f"\n[+] Çıktılar: {output_dir}/{timeline_csv_name}, "
+    print(f"\n[+] Outputs: {output_dir}/{timeline_csv_name}, "
           f"{summary_json_name}, collapse_report.txt")
     return summary
 
 
 def _compute_timeline_metrics(y_true, y_pred):
-    """3-class confusion + STOP/WALK deployment metrics. sklearn yok."""
+    """3-class confusion + STOP/WALK deployment metrics. No sklearn."""
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
     classes = [0, 1, 2]
@@ -1328,13 +1333,13 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
     print("MODE: validate_timeline")
     print("=" * 70)
 
-    # events opsiyonel: yoksa validate değil, sadece etiketsiz prediction yapılır.
+    # events is optional: if absent, only unlabeled prediction is done, not validation.
     if not events_path or not os.path.exists(events_path):
         if not events_path:
-            print("[!] --events verilmedi. Ground truth olmadığı için sadece prediction yapılacak.")
+            print("[!] --events was not provided. Only prediction will be done, since there's no ground truth.")
         else:
-            print(f"[!] Events dosyası bulunamadı: {events_path}")
-            print("[!] Ground truth olmadığı için sadece prediction yapılacak.")
+            print(f"[!] Events file not found: {events_path}")
+            print("[!] Only prediction will be done, since there's no ground truth.")
         return run_unlabeled_prediction(
             edf_path, model_dir, output_dir,
             timeline_csv_name='predicted_timeline.csv',
@@ -1347,12 +1352,12 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
     events_all = parse_events(events_path)
 
     fs = model.sampling_rate
-    # _predict_full_record ile aynı sliding window'ları yeniden kuruyoruz;
-    # prediction row'larıyla bire bir aynı sıradalar.
+    # Rebuild the same sliding windows as in _predict_full_record;
+    # they are in the exact same order as the prediction rows.
     signal_len = int(meta['signal_len_samples'])
     windows = build_sliding_windows(signal_len, fs, model.window_len, model.step_len)
-    print(f"[*] {len(windows)} sliding window oluşturuldu "
-          f"(window={model.window_len}s, step={model.step_len}s, tam kayıt üzerinde)")
+    print(f"[*] Generated {len(windows)} sliding windows "
+          f"(window={model.window_len}s, step={model.step_len}s, over the entire recording)")
     print(f"[*] Temporal smoothing window: {smoothing_window} "
           f"({'no smoothing' if smoothing_window == 1 else 'centered majority vote'})")
 
@@ -1454,8 +1459,8 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
         f.write(f"[SMOOTHED] Accuracy non-IDLE: {smoothed_metrics['deployment_accuracy_non_idle']:.4f}\n")
         f.write(f"[SMOOTHED] Balanced accuracy: {smoothed_metrics['balanced_accuracy']:.4f}\n")
 
-    print(f"\n[+] RAW prediction dağılımı: {raw_metrics['prediction_counts']}")
-    print(f"[+] SMOOTHED prediction dağılımı: {smoothed_metrics['prediction_counts']}")
+    print(f"\n[+] RAW prediction distribution: {raw_metrics['prediction_counts']}")
+    print(f"[+] SMOOTHED prediction distribution: {smoothed_metrics['prediction_counts']}")
     print(f"[SMOOTHED] Accuracy: {smoothed_metrics['deployment_accuracy_non_idle']:.2%}  "
           f"Balanced: {smoothed_metrics['balanced_accuracy']:.2%}")
     print(f"[RAW]      Accuracy: {raw_metrics['deployment_accuracy_non_idle']:.2%}  "
@@ -1464,12 +1469,12 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
     print(f"[+] SMOOTHED STOP recall: {smoothed_metrics['stop_recall']:.2%}" if not np.isnan(smoothed_metrics['stop_recall']) else "[+] SMOOTHED STOP recall: N/A")
     print(f"[+] SMOOTHED IDLE false positive rate: {smoothed_metrics['idle_false_positive_rate']:.2%}")
 
-    print(f"\nConfusion matrix RAW (satır=gerçek, sütun=tahmin):")
+    print(f"\nConfusion matrix RAW (row=actual, column=predicted):")
     print(f"{'':>12}{'pred_STOP':>12}{'pred_WALK':>12}{'pred_IDLE':>12}")
     for i, c in enumerate([0, 1, 2]):
         print(f"{'true_'+LABEL_NAMES[c]:>12}{cm_raw[i,0]:>12}{cm_raw[i,1]:>12}{cm_raw[i,2]:>12}")
 
-    print(f"\nConfusion matrix SMOOTHED (satır=gerçek, sütun=tahmin):")
+    print(f"\nConfusion matrix SMOOTHED (row=actual, column=predicted):")
     print(f"{'':>12}{'pred_STOP':>12}{'pred_WALK':>12}{'pred_IDLE':>12}")
     for i, c in enumerate([0, 1, 2]):
         print(f"{'true_'+LABEL_NAMES[c]:>12}{cm_smoothed[i,0]:>12}{cm_smoothed[i,1]:>12}{cm_smoothed[i,2]:>12}")
@@ -1479,10 +1484,10 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
               f"{smoothed_metrics['dominant_prediction_fraction']:.1%} "
               f"of all windows, or WALK count = 0. MODEL NOT DEPLOYABLE YET.")
     else:
-        print(f"\n[+] Collapse yok - smoothed dominant prediction "
+        print(f"\n[+] No collapse - smoothed dominant prediction "
               f"{smoothed_metrics['dominant_prediction_fraction']:.1%} (<90%), WALK count>0.")
 
-    print(f"\n[+] Çıktılar: {output_dir}/validated_timeline.csv, "
+    print(f"\n[+] Outputs: {output_dir}/validated_timeline.csv, "
           f"timeline_confusion_matrix_raw.csv, timeline_confusion_matrix_smoothed.csv, "
           f"timeline_confusion_matrix.csv, timeline_metrics.json, collapse_report.txt")
 
@@ -1498,21 +1503,21 @@ def main():
     parser.add_argument('--mode', required=True, choices=['train', 'train_multi', 'validate_timeline', 'predict'])
     parser.add_argument('--edf', default=None, help='(train/validate_timeline/predict)')
     parser.add_argument('--events', default=None)
-    parser.add_argument('--model', default=None, help='trained_model dizini (validate_timeline/predict için)')
+    parser.add_argument('--model', default=None, help='trained_model directory (for validate_timeline/predict)')
     parser.add_argument('--output-dir', required=True)
     parser.add_argument('--dataset-list', default=None, help='(train_multi) subject,session,edf,events CSV')
-    parser.add_argument('--dataset-dir', default='.', help='(train_multi) CSV\'deki bağıl yollar için taban dizin')
+    parser.add_argument('--dataset-dir', default='.', help='(train_multi) base directory for relative paths in the CSV')
     parser.add_argument('--event-overlap-threshold', type=float, default=0.5)
     parser.add_argument('--idle-distance-threshold', type=float, default=3.5)
     parser.add_argument('--confidence-threshold', type=float, default=0.6)
     parser.add_argument('--n-features-select', type=int, default=10)
     parser.add_argument('--lda-shrinkage', type=float, default=0.0)
     parser.add_argument('--balance-classes', choices=['none', 'downsample', 'class_weight'],
-                         default='none', help='Sınıf dengesizliğini gidermek için yöntem '
-                                               '(varsayılan: none). Şu an sadece downsample implement edildi.')
+                         default='none', help='Method to address class imbalance '
+                                               '(default: none). Currently only downsample is implemented.')
     parser.add_argument('--balance-subjects', choices=['none', 'downsample'], default='none',
-                        help='train_multi için subject-level balancing: none | downsample')
-    parser.add_argument('--seed', type=int, default=42, help='Reproducible class balancing için seed')
+                        help='Subject-level balancing for train_multi: none | downsample')
+    parser.add_argument('--seed', type=int, default=42, help='Seed for reproducible class balancing')
     parser.add_argument('--smoothing-window', type=int, choices=[1, 3, 5], default=3,
                         help='Temporal smoothing window (1=no smoothing)')
     parser.add_argument('--channel-set', choices=['motor3', 'motor5', 'motor9', 'motor13', 'all_eeg'],
@@ -1525,7 +1530,7 @@ def main():
 
     if args.mode == 'train':
         if not args.edf or not args.events:
-            raise SystemExit("--edf ve --events gerekli (train modu)")
+            raise SystemExit("--edf and --events are required (train mode)")
         run_train(args.edf, args.events, args.output_dir,
                    channel_set=args.channel_set,
                    idle_distance_threshold=args.idle_distance_threshold,
@@ -1536,7 +1541,7 @@ def main():
 
     elif args.mode == 'train_multi':
         if not args.dataset_list:
-            raise SystemExit("--dataset-list gerekli (train_multi modu)")
+            raise SystemExit("--dataset-list is required (train_multi mode)")
         run_train_multi(args.dataset_list, args.output_dir, dataset_dir=args.dataset_dir,
                          channel_set=args.channel_set,
                          idle_distance_threshold=args.idle_distance_threshold,
@@ -1548,14 +1553,14 @@ def main():
 
     elif args.mode == 'validate_timeline':
         if not args.edf or not args.model:
-            raise SystemExit("--edf ve --model gerekli (validate_timeline modu). --events opsiyonel.")
+            raise SystemExit("--edf and --model are required (validate_timeline mode). --events is optional.")
         run_validate_timeline(args.edf, args.events, args.model, args.output_dir,
                                overlap_threshold=args.event_overlap_threshold,
                                smoothing_window=args.smoothing_window)
 
     elif args.mode == 'predict':
         if not args.edf or not args.model:
-            raise SystemExit("--edf ve --model gerekli (predict modu)")
+            raise SystemExit("--edf and --model are required (predict mode)")
         run_unlabeled_prediction(args.edf, args.model, args.output_dir,
                                  smoothing_window=args.smoothing_window)
 

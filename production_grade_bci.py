@@ -1,18 +1,18 @@
 """
-Production-Grade EEG-BCI Motor Kontrol Sistemi
+Production-Grade EEG-BCI Motor Control System
 ==============================================
 
-Kritik Iyileştirmeler:
-✅ Baseline locking (EMA adaptif güncelleme)
+Critical Improvements:
+✅ Baseline locking (adaptive EMA update)
 ✅ ICA artifact removal
 ✅ CAR (Common Average Reference)
-✅ LDA Classifier (ML-tabanlı karar)
+✅ LDA Classifier (ML-based decision)
 ✅ CSP (Common Spatial Pattern)
 ✅ Frequency integration (trapz)
-✅ Gerçek 1/f EEG spektrumu
+✅ Realistic 1/f EEG spectrum
 ✅ Multi-threading (Acquisition, Processing, Output)
-✅ Virtual Joystick (vJoy) desteği
-✅ LSL (Lab Streaming Layer) veri kaynağı uyumluluğu
+✅ Virtual Joystick (vJoy) support
+✅ LSL (Lab Streaming Layer) data source compatibility
 """
 
 import numpy as np
@@ -28,13 +28,13 @@ import matplotlib.pyplot as plt
 from queue import Queue
 import logging
 
-# Logging ayarla
+# Configure logging
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
 
 class MotorState(Enum):
-    """Motor komudu durumları"""
+    """Motor command states"""
     IDLE = 0
     PREPARE = 1
     WALK = 2
@@ -43,7 +43,7 @@ class MotorState(Enum):
 
 @dataclass
 class FrequencyBand:
-    """Frekans band tanımı"""
+    """Frequency band definition"""
     name: str
     low: float
     high: float
@@ -59,11 +59,11 @@ class ICAFilter:
     
     def fit(self, X):
         """
-        FastICA benzeri uygulama
+        FastICA-like implementation
         X: (n_samples, n_channels)
         """
         if X.shape[0] < X.shape[1]:
-            logger.warning("[ICA] Yetersiz örnek, ICA fit edilmedi")
+            logger.warning("[ICA] Not enough samples, ICA not fitted")
             return self
         
         # Whitening
@@ -98,14 +98,14 @@ class ICAFilter:
         return self
     
     def transform(self, X):
-        """Independent components çıkar"""
+        """Extract independent components"""
         if not self.fitted:
             return X
         return X @ self.W.T
     
     def get_artifact_components(self, ic_signals, threshold=2.0):
         """
-        Artefakt bileşenleri belirle (yüksek varyans)
+        Identify artifact components (high variance)
         """
         variances = np.var(ic_signals, axis=0)
         artifact_idx = np.where(variances > threshold * np.median(variances))[0]
@@ -114,7 +114,7 @@ class ICAFilter:
 
 class CSPFilter:
     """
-    Common Spatial Pattern (Motor imagery için)
+    Common Spatial Pattern (for motor imagery)
     """
     
     def __init__(self, n_filters=2):
@@ -124,10 +124,10 @@ class CSPFilter:
     
     def fit(self, X_class1, X_class2):
         """
-        X_class1: (n_trials, n_samples, n_channels) - Hareket
-        X_class2: (n_trials, n_samples, n_channels) - Dinlenme
+        X_class1: (n_trials, n_samples, n_channels) - Movement
+        X_class2: (n_trials, n_samples, n_channels) - Rest
         """
-        # Covariance matrislerini hesapla
+        # Compute covariance matrices
         cov1 = np.zeros((X_class1.shape[2], X_class1.shape[2]))
         for trial in X_class1:
             cov1 += trial.T @ trial
@@ -147,7 +147,7 @@ class CSPFilter:
         return self
     
     def transform(self, X):
-        """CSP filtreleri uygula"""
+        """Apply CSP filters"""
         if not self.fitted:
             return X
         return X @ self.filters
@@ -155,7 +155,7 @@ class CSPFilter:
 
 class SimpleLDA:
     """
-    Basit Linear Discriminant Analysis (sklearn olmadan)
+    Simple Linear Discriminant Analysis (without sklearn)
     """
     
     def __init__(self):
@@ -189,7 +189,7 @@ class SimpleLDA:
         return self
     
     def predict_proba(self, X):
-        """Olasılık hesapla"""
+        """Compute probability"""
         scores_0 = X @ self.cov_inv @ self.mean_0
         scores_1 = X @ self.cov_inv @ self.mean_1
         
@@ -201,19 +201,19 @@ class SimpleLDA:
         return probs
     
     def predict(self, X):
-        """Tahmin et"""
+        """Predict"""
         probs = self.predict_proba(X)
         return np.argmax(probs, axis=1)
     
     def score(self, X, y):
-        """Accuracy hesapla"""
+        """Compute accuracy"""
         predictions = self.predict(X)
         return np.mean(predictions == y)
 
 
 class ProductionGradeEEGBCI:
     """
-    Production-Grade EEG-BCI Sistemi
+    Production-Grade EEG-BCI System
     """
     
     def __init__(self, sampling_rate=256, n_channels=3):
@@ -227,10 +227,10 @@ class ProductionGradeEEGBCI:
         self.nyquist = sampling_rate / 2
         self.channels = ['C3', 'C4', 'Cz'][:n_channels]
         
-        logger.info(f"[INIT] Production-Grade BCI başlatılıyor...")
-        logger.info(f"       Fs: {sampling_rate} Hz, Kanallar: {self.channels}")
+        logger.info(f"[INIT] Starting Production-Grade BCI...")
+        logger.info(f"       Fs: {sampling_rate} Hz, Channels: {self.channels}")
         
-        # FREKANSBand'ları
+        # Frequency bands
         self.bands = {
             'Mu': FrequencyBand('Mu', 8, 13),
             'Beta': FrequencyBand('Beta', 13, 30),
@@ -238,16 +238,16 @@ class ProductionGradeEEGBCI:
             'HighBeta': FrequencyBand('HighBeta', 20, 30)
         }
         
-        # FİLTRELER (cache)
+        # Filters (cached)
         self.notch_sos = self._create_notch_filter(50)  # 50 Hz
-        self.notch_sos_100 = self._create_notch_filter(100)  # Harmonik
+        self.notch_sos_100 = self._create_notch_filter(100)  # Harmonic
         
         self.band_filters = {
             name: self._create_bandpass_filter(band.low, band.high)
             for name, band in self.bands.items()
         }
         
-        # Filtre states
+        # Filter states
         self.filter_states = {}
         
         # CAR reference
@@ -255,7 +255,7 @@ class ProductionGradeEEGBCI:
         
         # Baseline (EMA - Exponential Moving Average)
         self.baseline_power = {ch: {} for ch in self.channels}
-        self.baseline_ema_alpha = 0.02  # Yavaş güncelleme (çoğunlukla locked)
+        self.baseline_ema_alpha = 0.02  # Slow update (mostly locked)
         self.baseline_locked = False
         self.baseline_lock_time = None
         
@@ -273,27 +273,27 @@ class ProductionGradeEEGBCI:
         self.training_data = {'motor': [], 'idle': []}
         self.training_labels = []
         
-        # Özellik buffer (classifier için)
+        # Feature buffer (for the classifier)
         self.feature_buffer = deque(maxlen=20)
         
-        # Durum makinesi
+        # State machine
         self.current_state = MotorState.IDLE
         self.state_start_time = time.time()
         
-        # İstatistikler
+        # Statistics
         self.frame_count = 0
         self.processing_times = deque(maxlen=100)
         
-        logger.info("[INIT] BCI hazırlandı")
+        logger.info("[INIT] BCI ready")
     
     def _create_notch_filter(self, freq, quality=20):
-        """Notch filtresi"""
+        """Notch filter"""
         w0 = freq / self.nyquist
         b, a = signal.iirnotch(w0, quality)
         return signal.tf2sos(b, a)
     
     def _create_bandpass_filter(self, low, high, order=3):
-        """Bandpass filtresi"""
+        """Bandpass filter"""
         low_norm = low / self.nyquist
         high_norm = high / self.nyquist
         return signal.butter(order, [low_norm, high_norm], 
@@ -302,19 +302,19 @@ class ProductionGradeEEGBCI:
     def apply_car_reference(self, eeg_data: Dict) -> Dict:
         """
         Common Average Reference (CAR)
-        Bütün kanalların ortalamasını her kanaldan çıkar
+        Subtract the average of all channels from each channel
         """
-        # Referans ortalama hesapla
+        # Compute reference average
         average = np.mean([eeg_data[ch] for ch in self.channels], axis=0)
         
-        # Her kanaldan çıkar
+        # Subtract from each channel
         car_data = {ch: eeg_data[ch] - average for ch in self.channels}
         
         return car_data
     
     def apply_ica_artifact_removal(self, eeg_data: Dict) -> Dict:
         """
-        ICA tabanlı artifact removal
+        ICA-based artifact removal
         """
         if not self.ica_fitted:
             return eeg_data
@@ -323,13 +323,13 @@ class ProductionGradeEEGBCI:
         X = np.array([eeg_data[ch] for ch in self.channels]).T
         ic_signals = self.ica.transform(X)
         
-        # Artifact components tanımla
+        # Identify artifact components
         artifact_idx = self.ica.get_artifact_components(ic_signals)
         
-        # Artifact components'i sıfırla
+        # Zero out artifact components
         ic_signals[:, artifact_idx] = 0
         
-        # Inverse transform (demixing matrix tersi)
+        # Inverse transform (inverse of the demixing matrix)
         W_inv = np.linalg.pinv(self.ica.W)
         denoised = ic_signals @ W_inv
         
@@ -344,11 +344,11 @@ class ProductionGradeEEGBCI:
         
         band_power = {}
         for band_name, band in self.bands.items():
-            # Frekans aralığında olanları bul
+            # Find the indices within the frequency range
             idx_low = np.argmin(np.abs(freqs - band.low))
             idx_high = np.argmin(np.abs(freqs - band.high))
             
-            # Band gücü (basit ortalama)
+            # Band power (simple average)
             if idx_low < len(psd) and idx_high < len(psd):
                 power = np.mean(psd[idx_low:idx_high+1])
             else:
@@ -360,7 +360,7 @@ class ProductionGradeEEGBCI:
     
     def compute_erd_adaptive(self, current_power: Dict) -> Dict:
         """
-        Adaptif ERD hesaplama (EMA baseline)
+        Adaptive ERD calculation (EMA baseline)
         """
         erd = {}
         
@@ -370,17 +370,17 @@ class ProductionGradeEEGBCI:
             for band_name in self.bands.keys():
                 current = current_power[ch].get(band_name, 0) + 1e-6
                 
-                # Baseline (ilk kez: current'i baseline yap)
+                # Baseline (first time: use current as baseline)
                 if band_name not in self.baseline_power[ch]:
                     self.baseline_power[ch][band_name] = current
                 
                 baseline = self.baseline_power[ch][band_name]
                 
-                # ERD hesapla
+                # Compute ERD
                 erd_val = ((baseline - current) / baseline) * 100
                 erd[ch][band_name] = erd_val
                 
-                # EMA ile baseline güncelle (yavaş)
+                # Update baseline via EMA (slow)
                 if not self.baseline_locked:
                     alpha = self.baseline_ema_alpha
                     self.baseline_power[ch][band_name] = (
@@ -391,7 +391,7 @@ class ProductionGradeEEGBCI:
     
     def extract_features(self, eeg_data: Dict) -> np.ndarray:
         """
-        Classifier için özellikler çıkar
+        Extract features for the classifier
         """
         features = []
         
@@ -399,7 +399,7 @@ class ProductionGradeEEGBCI:
             signal_data = np.array(list(self.reference_buffer[ch]))
             psd_power, _, _ = self.compute_psd_trapz(signal_data)
             
-            # Özellikler: Her band'ın gücü + Band oranları
+            # Features: power of each band + band ratios
             for band_name in ['Mu', 'Beta', 'LowBeta', 'HighBeta']:
                 features.append(psd_power.get(band_name, 0))
             
@@ -413,11 +413,11 @@ class ProductionGradeEEGBCI:
     def train_classifier(self, motor_features: List, 
                         idle_features: List):
         """
-        LDA classifier'ı eğit
+        Train the LDA classifier
         """
-        logger.info("[TRAIN] LDA classifier eğitiliyor...")
+        logger.info("[TRAIN] Training LDA classifier...")
         
-        # Eğitim verileri hazırla
+        # Prepare training data
         X_train = np.vstack([np.array(motor_features), 
                             np.array(idle_features)])
         y_train = np.hstack([np.ones(len(motor_features)),
@@ -432,12 +432,12 @@ class ProductionGradeEEGBCI:
     
     def predict_motor_command(self, features: np.ndarray) -> Tuple[str, float]:
         """
-        Classifier ile motor komudu tahmin et
+        Predict the motor command using the classifier
         """
         if not self.lda_fitted:
             return 'NONE', 0.5
         
-        # Tahmin
+        # Prediction
         prediction = self.lda.predict([features])[0]
         probabilities = self.lda.predict_proba([features])[0]
         confidence = np.max(probabilities)
@@ -447,21 +447,21 @@ class ProductionGradeEEGBCI:
         return command, confidence
     
     def lock_baseline(self):
-        """Baseline'ı kilitle (10 saniye dinlenme sonrası)"""
+        """Lock the baseline (after 10 seconds of rest)"""
         self.baseline_locked = True
         self.baseline_lock_time = time.time()
-        logger.info("[BASELINE] Kilitlendi")
+        logger.info("[BASELINE] Locked")
     
     def process_frame(self, eeg_raw: Dict) -> Dict:
         """
-        Bir frame'i işle
+        Process a single frame
         """
         start_time = time.time()
         
         # 1. CAR Reference
         eeg_car = self.apply_car_reference(eeg_raw)
         
-        # 2. Notch filtreleri (50 ve 100 Hz)
+        # 2. Notch filters (50 and 100 Hz)
         eeg_notch = {}
         for ch in self.channels:
             x = eeg_car[ch]
@@ -472,37 +472,37 @@ class ProductionGradeEEGBCI:
         # 3. ICA (artifact removal)
         eeg_clean = self.apply_ica_artifact_removal(eeg_notch)
         
-        # 4. Buffer'a ekle (reference için)
+        # 4. Add to buffer (for reference)
         for ch in self.channels:
             self.reference_buffer[ch].append(eeg_clean[ch])
         
-        # Pencerenin dolu olmasını bekle
+        # Wait for the window to fill up
         if len(self.reference_buffer[self.channels[0]]) < 128:
             return {'ready': False}
         
-        # 5. PSD hesapla
+        # 5. Compute PSD
         psd_data = {}
         for ch in self.channels:
             signal_data = np.array(list(self.reference_buffer[ch]))
             psd_power, freqs, psd = self.compute_psd_trapz(signal_data)
             psd_data[ch] = psd_power
         
-        # 6. ERD hesapla
+        # 6. Compute ERD
         erd_data = self.compute_erd_adaptive(psd_data)
         
-        # 7. Özellikler çıkar
+        # 7. Extract features
         features = self.extract_features(eeg_clean)
         self.feature_buffer.append(features)
         
-        # 8. Classifier ile tahmin et
+        # 8. Predict using the classifier
         if self.lda_fitted and len(self.feature_buffer) >= 5:
-            # Son 5 frame'in ortalaması
+            # Average of the last 5 frames
             avg_features = np.mean(np.array(list(self.feature_buffer)), axis=0)
             command, confidence = self.predict_motor_command(avg_features)
         else:
             command, confidence = 'NONE', 0.0
         
-        # 9. Durum makinesi
+        # 9. State machine
         new_state = self._update_state_machine(command, confidence)
         
         self.frame_count += 1
@@ -520,7 +520,7 @@ class ProductionGradeEEGBCI:
         }
     
     def _update_state_machine(self, command: str, confidence: float) -> MotorState:
-        """Durum makinesi"""
+        """State machine"""
         current_time = time.time()
         time_in_state = current_time - self.state_start_time
         
@@ -549,7 +549,7 @@ class ProductionGradeEEGBCI:
 
 class RealTimeEEGSimulator:
     """
-    Gerçekçi EEG Simülatörü (1/f spectrum)
+    Realistic EEG Simulator (1/f spectrum)
     """
     
     def __init__(self, sampling_rate=256, duration=30):
@@ -559,7 +559,7 @@ class RealTimeEEGSimulator:
     
     def generate_1f_noise(self, n_samples, alpha=1.0):
         """
-        1/f (pink) noise oluştur
+        Generate 1/f (pink) noise
         """
         # White noise spectrum
         white_fft = np.fft.rfft(np.random.randn(n_samples))
@@ -567,10 +567,10 @@ class RealTimeEEGSimulator:
         # Frequencies
         freqs = np.fft.rfftfreq(n_samples, 1/self.fs)
         
-        # 1/f filtering (DC frekansı hariç)
+        # 1/f filtering (excluding the DC frequency)
         S = np.ones_like(freqs)
         S[1:] = freqs[1:] ** (-alpha/2)
-        S[0] = S[1]  # DC'i sıfırdan koru
+        S[0] = S[1]  # Keep DC away from zero
         
         # Apply filter
         pink_fft = white_fft * S
@@ -582,7 +582,7 @@ class RealTimeEEGSimulator:
     
     def generate_realistic_eeg(self, phase='baseline'):
         """
-        Gerçekçi EEG sinyali (1/f background + oscillations)
+        Realistic EEG signal (1/f background + oscillations)
         """
         # 1/f background
         background = 0.5 * self.generate_1f_noise(len(self.t), alpha=2.0)
@@ -599,8 +599,8 @@ class RealTimeEEGSimulator:
         elif phase == 'motor':
             # Motor: Mu suppression, Beta increase
             walking = np.sin(2*np.pi*0.5*self.t)
-            c3 = (0.6 * np.sin(2*np.pi*10*self.t) +     # Mu ↓
-                  1.5 * np.sin(2*np.pi*20*self.t+walking) +  # Beta ↑
+            c3 = (0.6 * np.sin(2*np.pi*10*self.t) +     # Mu down
+                  1.5 * np.sin(2*np.pi*20*self.t+walking) +  # Beta up
                   background)
             c4 = (0.7 * np.sin(2*np.pi*10*self.t+0.3) +
                   1.4 * np.sin(2*np.pi*20*self.t+walking+0.3) +
@@ -609,7 +609,7 @@ class RealTimeEEGSimulator:
                   1.8 * np.sin(2*np.pi*20*self.t+walking) +
                   background)
         
-        # Şebeke gürültüsü (50 Hz)
+        # Line noise (50 Hz)
         line_noise = 0.3 * np.sin(2*np.pi*50*self.t)
         
         return {
@@ -620,20 +620,20 @@ class RealTimeEEGSimulator:
 
 
 def test_production_system():
-    """Production sistemi test et"""
+    """Test the production system"""
     
     print("\n" + "="*80)
-    print("PRODUCTION-GRADE EEG-BCI MOTOR KONTROL SİSTEMİ")
+    print("PRODUCTION-GRADE EEG-BCI MOTOR CONTROL SYSTEM")
     print("="*80)
     
-    # Sistem oluştur
+    # Create the system
     bci = ProductionGradeEEGBCI(sampling_rate=256, n_channels=3)
     
-    # Simülatör
+    # Simulator
     simulator = RealTimeEEGSimulator(sampling_rate=256, duration=30)
     
-    # Test aşamaları
-    print("\n[FAZA 1] Baseline öğrenme (10 saniye)...")
+    # Test phases
+    print("\n[PHASE 1] Baseline learning (10 seconds)...")
     
     baseline_features = []
     for i in range(10 * 256):
@@ -642,11 +642,11 @@ def test_production_system():
         
         if result['ready'] and i % 256 == 0:
             baseline_features.append(bci.extract_features(eeg_data))
-            print(f"  {i//256}s: Baseline öğreniliyor...")
+            print(f"  {i//256}s: Learning baseline...")
     
     bci.lock_baseline()
     
-    print("\n[FAZA 2] Motor aktivite (10 saniye)...")
+    print("\n[PHASE 2] Motor activity (10 seconds)...")
     
     motor_features = []
     for i in range(10 * 256):
@@ -655,13 +655,13 @@ def test_production_system():
         
         if result['ready'] and i % 256 == 0:
             motor_features.append(bci.extract_features(eeg_data))
-            print(f"  {i//256}s: Motor aktivite...")
+            print(f"  {i//256}s: Motor activity...")
     
-    print("\n[FAZA 3] LDA Classifier eğitimi...")
+    print("\n[PHASE 3] LDA Classifier training...")
     
     bci.train_classifier(motor_features, baseline_features)
     
-    print("\n[FAZA 4] Real-time tahmin (10 saniye)...")
+    print("\n[PHASE 4] Real-time prediction (10 seconds)...")
     print("-" * 80)
     
     predictions = []
@@ -685,8 +685,8 @@ def test_production_system():
             })
     
     print("\n" + "="*80)
-    print(f"[TAMAMLANDI] {bci.frame_count} frame işlendi")
-    print(f"[STATS] Ortalama işleme: {np.mean(bci.processing_times)*1000:.2f} ms")
+    print(f"[DONE] {bci.frame_count} frames processed")
+    print(f"[STATS] Average processing: {np.mean(bci.processing_times)*1000:.2f} ms")
     print("="*80)
     
     return bci, predictions
