@@ -1,0 +1,32 @@
+[
+  {
+    "rank": 0,
+    "feature_index": 64,
+    "feature_name": "Cz_line_length",
+    "f_score": 2.0901129538674375
+  },
+  {
+    "rank": 1,
+    "feature_index": 10,
+    "feature_name": "C3_line_length",
+    "f_score": 1.8896583890932845
+  },
+  {
+    "rank": 2,
+    "feature_index": 37,
+    "feature_name": "C4_line_length",
+    "f_score": 1.355414315490245
+  },
+  {
+    "rank": 3,
+    "feature_index": 31,
+    "feature_name": "C4_max",
+    "f_score": 1.3020628272723727
+  },
+  {
+    "rank": 4,
+    "feature_index": 27,
+    "feature_name": "C4_mean",
+    "f_score": 1.2237034627513292
+  }
+]

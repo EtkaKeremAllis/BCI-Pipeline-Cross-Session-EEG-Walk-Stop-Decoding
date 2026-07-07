@@ -1,0 +1,20 @@
+============================================================
+           Condition    Accuracy        F1   ROC-AUC
+------------------------------------------------------------
+         A) EEG only      82.93%    75.86%     0.921
+         B) EOG only      70.73%    57.14%     0.769
+          C) EEG+EOG      75.61%    61.54%     0.705
+  D) EOG-cleaned EEG      75.61%    61.54%     0.751
+============================================================
+
+Interpretation:
+  - EOG-only accuracy is HIGH (70.73%) -> WARNING: the model may be learning an artifact; the EEG result is suspect.
+  - EEG+EOG (75.61%) vs EEG-only (82.93%) show no large gap -> adding EOG doesn't meaningfully raise the result.
+  - Accuracy change after EOG cleaning: -7.32%
+  - Score dropped noticeably after cleaning - part of the earlier EEG result may have come from an EOG artifact.
+
+Most accurate summary sentence:
+"I classified Walk/Stop command periods from C3/C4/Cz EEG recordings, controlling for EOG/movement artifact influence."
+This is different from claiming "I decoded walking intent from pure brain signal."
+
+Important technical risk: if the model was trained on sub-01 or one specific session, it may generalize poorly to another subject, another day, another cap placement, or a noisier recording.
