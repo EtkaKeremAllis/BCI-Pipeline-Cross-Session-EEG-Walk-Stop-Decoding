@@ -358,12 +358,104 @@ class DeployableBCIModel:
 
 
 # ============================================================================
+# CLASS BALANCING
+# ============================================================================
+
+def downsample_classes(items, y, seed=42):
+    """
+    Çoğunluk sınıfı (genelde STOP), azınlık sınıfın (genelde WALK) sayısına
+    reproducible şekilde (seed'li) rastgele indirger.
+
+    items: y ile aynı sırada herhangi bir liste (window dict'leri VEYA
+           zaten-epoch-edilmiş eeg_dict'leri olabilir - içeriğine bakmaz).
+    y:     items ile aynı uzunlukta 0/1 etiket dizisi.
+
+    Döndürür: (items_balanced, y_balanced, stats)
+    stats: kept/dropped sayıları + seed (training_summary.txt'ye yazılacak).
+    """
+    y = np.asarray(y)
+    idx_stop = np.where(y == 0)[0]
+    idx_walk = np.where(y == 1)[0]
+    n_stop_before, n_walk_before = len(idx_stop), len(idx_walk)
+
+    if n_stop_before == 0 or n_walk_before == 0:
+        logger.warning("downsample_classes: bir sınıf tamamen yok (STOP=%d, WALK=%d) - "
+                        "dengeleme atlanıyor.", n_stop_before, n_walk_before)
+        stats = {
+            'method': 'downsample', 'applied': False, 'seed': seed,
+            'n_stop_before': n_stop_before, 'n_walk_before': n_walk_before,
+            'n_stop_after': n_stop_before, 'n_walk_after': n_walk_before,
+            'n_kept': n_stop_before + n_walk_before, 'n_dropped': 0,
+        }
+        return list(items), y, stats
+
+    n_target = min(n_stop_before, n_walk_before)
+    rng = np.random.default_rng(seed)
+
+    if n_stop_before > n_target:
+        idx_stop = rng.choice(idx_stop, size=n_target, replace=False)
+    if n_walk_before > n_target:
+        idx_walk = rng.choice(idx_walk, size=n_target, replace=False)
+
+    keep_idx = np.sort(np.concatenate([idx_stop, idx_walk]))
+    items_balanced = [items[i] for i in keep_idx]
+    y_balanced = y[keep_idx]
+
+    n_before_total = n_stop_before + n_walk_before
+    n_after_total = len(keep_idx)
+    stats = {
+        'method': 'downsample', 'applied': True, 'seed': int(seed),
+        'n_stop_before': int(n_stop_before), 'n_walk_before': int(n_walk_before),
+        'n_stop_after': int(np.sum(y_balanced == 0)), 'n_walk_after': int(np.sum(y_balanced == 1)),
+        'n_kept': int(n_after_total), 'n_dropped': int(n_before_total - n_after_total),
+    }
+    return items_balanced, y_balanced, stats
+
+
+def apply_class_balancing(items, y, balance_classes, seed):
+    """
+    balance_classes: 'none' | 'downsample' | 'class_weight'
+    'class_weight' henüz implement edilmedi - açıkça hata verir (sessizce
+    yoksayıp yanlış izlenim vermek yerine).
+    """
+    if balance_classes == 'none':
+        y = np.asarray(y)
+        return list(items), y, {
+            'method': 'none', 'applied': False, 'seed': seed,
+            'n_stop_before': int(np.sum(y == 0)), 'n_walk_before': int(np.sum(y == 1)),
+            'n_stop_after': int(np.sum(y == 0)), 'n_walk_after': int(np.sum(y == 1)),
+            'n_kept': len(y), 'n_dropped': 0,
+        }
+    elif balance_classes == 'downsample':
+        return downsample_classes(items, y, seed=seed)
+    elif balance_classes == 'class_weight':
+        raise NotImplementedError(
+            "--balance-classes class_weight henüz implement edilmedi. "
+            "Şimdilik --balance-classes downsample kullanın."
+        )
+    else:
+        raise ValueError(f"Bilinmeyen balance_classes değeri: {balance_classes}")
+
+
+def _format_balance_stats(stats):
+    lines = [f"Class balancing: {stats['method']} (seed={stats['seed']})"]
+    if stats['applied']:
+        lines.append(f"  Before: STOP={stats['n_stop_before']}, WALK={stats['n_walk_before']}")
+        lines.append(f"  After:  STOP={stats['n_stop_after']}, WALK={stats['n_walk_after']}")
+        lines.append(f"  Kept: {stats['n_kept']}, Dropped: {stats['n_dropped']}")
+    else:
+        lines.append(f"  Not applied. STOP={stats['n_stop_before']}, WALK={stats['n_walk_before']}")
+    return "\n".join(lines)
+
+
+# ============================================================================
 # MODE: train
 # ============================================================================
 
 def run_train(edf_path, events_path, output_dir, channels=('C3', 'C4', 'Cz'),
               window_len=5.0, step_len=1.0, idle_distance_threshold=3.5,
-              confidence_threshold=0.6, n_features_select=5, lda_shrinkage=0.0):
+              confidence_threshold=0.6, n_features_select=5, lda_shrinkage=0.0,
+              balance_classes='none', seed=42):
     print("=" * 70)
     print("MODE: train")
     print("=" * 70)
@@ -391,6 +483,16 @@ def run_train(edf_path, events_path, output_dir, channels=('C3', 'C4', 'Cz'),
     print(f"[*] {len(train_windows)} eğitim penceresi çıkarıldı "
           f"(event-ankorlu, non-overlapping, {window_len}s)")
 
+    labels_arr = np.array([w['label'] for w in train_windows])
+    train_windows, _, balance_stats = apply_class_balancing(
+        train_windows, labels_arr, balance_classes, seed
+    )
+    if balance_stats['applied']:
+        print(f"[*] Class balancing ({balance_stats['method']}): "
+              f"STOP {balance_stats['n_stop_before']}->{balance_stats['n_stop_after']}, "
+              f"WALK {balance_stats['n_walk_before']}->{balance_stats['n_walk_after']}, "
+              f"dropped={balance_stats['n_dropped']} (seed={balance_stats['seed']})")
+
     stats = model.train(preprocessed, train_windows)
     print(f"[+] Eğitim tamamlandı: STOP={stats['n_stop']}, WALK={stats['n_walk']}")
     print(f"[+] Seçili feature indeksleri: {stats['selected_feature_idx']}")
@@ -408,6 +510,7 @@ def run_train(edf_path, events_path, output_dir, channels=('C3', 'C4', 'Cz'),
                 f"lda_shrinkage: {info_saved['lda_shrinkage']}\n")
         f.write(f"idle_distance_threshold: {idle_distance_threshold}, "
                 f"confidence_threshold: {confidence_threshold}\n\n")
+        f.write(_format_balance_stats(balance_stats) + "\n\n")
         f.write("BILIMSEL DURUSTLUK: Bu model onceden egitilmis bir modelle EEG'den\n")
         f.write("Walk/Stop komut periyotlarini tahmin eder. Saf beyin-ici yurume\n")
         f.write("niyetinin kanitlanmis decode'u degildir. Performans egitim verisine,\n")
@@ -437,7 +540,8 @@ def _resolve_path(path, dataset_dir):
 def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
                      channels=('C3', 'C4', 'Cz'), window_len=5.0, step_len=1.0,
                      idle_distance_threshold=3.5, confidence_threshold=0.6,
-                     n_features_select=5, lda_shrinkage=0.0):
+                     n_features_select=5, lda_shrinkage=0.0,
+                     balance_classes='none', seed=42):
     """
     Birden fazla (subject, session) kaydını AYRI AYRI preprocess edip,
     SADECE etiketli command pencerelerini havuzlayarak TEK bir
@@ -574,7 +678,17 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
         print(f"[!] UYARI: ciddi sınıf dengesizliği - oran {imbalance_ratio:.1f}:1 "
               f"(STOP={n_stop_total}, WALK={n_walk_total}). Model çoğunluk sınıfa yatkın olabilir.")
 
-    # 6) TEK model, havuzlanmış trial'larla eğitilir
+    # --- Class balancing (train_from_trials'tan ÖNCE uygulanır) ---
+    pooled_trials, y_pooled, balance_stats = apply_class_balancing(
+        pooled_trials, y_pooled, balance_classes, seed
+    )
+    if balance_stats['applied']:
+        print(f"[*] Class balancing ({balance_stats['method']}): "
+              f"STOP {balance_stats['n_stop_before']}->{balance_stats['n_stop_after']}, "
+              f"WALK {balance_stats['n_walk_before']}->{balance_stats['n_walk_after']}, "
+              f"dropped={balance_stats['n_dropped']} (seed={balance_stats['seed']})")
+
+    # 6) TEK model, havuzlanmış (ve varsa dengelenmiş) trial'larla eğitilir
     model = DeployableBCIModel(
         channels=channels, sampling_rate=fs_reference, window_len=window_len, step_len=step_len,
         idle_distance_threshold=idle_distance_threshold,
@@ -615,6 +729,7 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
                 f"lda_shrinkage: {info_saved['lda_shrinkage']}\n")
         f.write(f"idle_distance_threshold: {idle_distance_threshold}, "
                 f"confidence_threshold: {confidence_threshold}\n\n")
+        f.write(_format_balance_stats(balance_stats) + "\n\n")
         f.write("IMPORTANT: Continuous EEG signals were NEVER concatenated across sessions.\n")
         f.write("Each recording was preprocessed independently; only already-epoched\n")
         f.write("(labeled command-window) trials were pooled before training.\n\n")
@@ -806,6 +921,10 @@ def main():
     parser.add_argument('--confidence-threshold', type=float, default=0.6)
     parser.add_argument('--n-features-select', type=int, default=5)
     parser.add_argument('--lda-shrinkage', type=float, default=0.0)
+    parser.add_argument('--balance-classes', choices=['none', 'downsample', 'class_weight'],
+                         default='none', help='Sınıf dengesizliğini gidermek için yöntem '
+                                               '(varsayılan: none). Şu an sadece downsample implement edildi.')
+    parser.add_argument('--seed', type=int, default=42, help='Reproducible class balancing için seed')
     args = parser.parse_args()
 
     logger.setLevel(logging.WARNING)
@@ -817,7 +936,8 @@ def main():
                    idle_distance_threshold=args.idle_distance_threshold,
                    confidence_threshold=args.confidence_threshold,
                    n_features_select=args.n_features_select,
-                   lda_shrinkage=args.lda_shrinkage)
+                   lda_shrinkage=args.lda_shrinkage,
+                   balance_classes=args.balance_classes, seed=args.seed)
 
     elif args.mode == 'train_multi':
         if not args.dataset_list:
@@ -826,7 +946,8 @@ def main():
                          idle_distance_threshold=args.idle_distance_threshold,
                          confidence_threshold=args.confidence_threshold,
                          n_features_select=args.n_features_select,
-                         lda_shrinkage=args.lda_shrinkage)
+                         lda_shrinkage=args.lda_shrinkage,
+                         balance_classes=args.balance_classes, seed=args.seed)
 
     elif args.mode == 'validate_timeline':
         if not args.edf or not args.events or not args.model:
