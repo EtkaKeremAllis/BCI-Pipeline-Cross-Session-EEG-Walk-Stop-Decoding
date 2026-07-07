@@ -40,6 +40,68 @@ COMMAND_LABEL_MAP = {'x5': 0, 'x8': 1}  # x5=STOP=0, x8=WALK=1. x99/diğerleri -
 
 
 # ============================================================================
+# CHANNEL SETS (CLI'dan kod değiştirmeden geniş motor-alan kanal setleri
+# denemek için)
+# ============================================================================
+
+CHANNEL_SETS = {
+    'motor3': ['C3', 'Cz', 'C4'],
+    'motor5': ['C3', 'C1', 'Cz', 'C2', 'C4'],
+    'motor9': ['FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'C3', 'Cz', 'C4', 'CPz'],
+    'motor13': ['FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'C3', 'C1', 'Cz', 'C2', 'C4',
+                'CP3', 'CPz', 'CP4'],
+}
+# all_eeg: bu alt string'lerden HERHANGİ birini adında içeren kanallar hariç
+# tutulur (case-insensitive).
+_ALL_EEG_EXCLUDE_SUBSTRINGS = ['EOG', 'EMG', 'ECG', 'HEOG', 'VEOG', 'EXG',
+                               'STATUS', 'TRIGGER', 'STIM']
+
+
+def resolve_channels(signals, channel_set):
+    """
+    signals: read_edf() çıktısı (kanal adı -> 1D array sözlüğü).
+    channel_set: 'motor3' | 'motor5' | 'motor9' | 'motor13' | 'all_eeg'
+
+    Döndürür: seçilen kanal adlarının listesi.
+
+    motor3/5/9/13 için: sabit kanal listesi EDF'de eksiksiz bulunmalı -
+    eksik varsa AÇIKÇA hata verir (sessizce eksik bırakıp yanlış bir
+    model_info.json üretmek yerine).
+
+    all_eeg için: EOG/EMG/ECG/... içeren kanallar hariç, EDF'deki TÜM
+    kanallar, EDF'deki orijinal sırayla.
+    """
+    if channel_set == 'all_eeg':
+        selected = []
+        for ch in signals.keys():
+            upper = ch.upper()
+            if any(exc in upper for exc in _ALL_EEG_EXCLUDE_SUBSTRINGS):
+                continue
+            selected.append(ch)
+        if not selected:
+            raise SystemExit(
+                "channel_set=all_eeg: EOG/EMG/ECG/... dışında hiç kanal "
+                "bulunamadı - EDF kanal adlarını kontrol edin."
+            )
+        return selected
+
+    if channel_set not in CHANNEL_SETS:
+        raise ValueError(
+            f"Bilinmeyen channel_set: {channel_set!r}. "
+            f"Geçerli seçenekler: {list(CHANNEL_SETS) + ['all_eeg']}"
+        )
+
+    wanted = CHANNEL_SETS[channel_set]
+    missing = [ch for ch in wanted if ch not in signals]
+    if missing:
+        raise SystemExit(
+            f"channel_set={channel_set} için gerekli kanal(lar) EDF'de yok: {missing}.\n"
+            f"EDF'deki mevcut kanallar: {list(signals.keys())}"
+        )
+    return list(wanted)
+
+
+# ============================================================================
 # FEATURE NAMES (deterministic sıra - kaydetmek için)
 # ============================================================================
 
@@ -196,8 +258,10 @@ class DeployableBCIModel:
                  fir_order=200, use_notch=False, notch_freq=60, use_laplacian=True,
                  use_csp=True, lda_shrinkage=0.0, n_features_select=10,
                  window_len=3.0, step_len=0.25,
-                 confidence_threshold=0.6, idle_distance_threshold=3.5):
+                 confidence_threshold=0.6, idle_distance_threshold=3.5,
+                 channel_set=None):
         self.channels = list(channels)
+        self.channel_set = channel_set  # sadece bilgi amaçlı - seçim mantığı zaten resolve_channels()'ta yapıldı
         self.sampling_rate = sampling_rate
         self.window_len = window_len
         self.step_len = step_len
@@ -329,6 +393,7 @@ class DeployableBCIModel:
 
         info = {
             'channels': self.channels,
+            'channel_set': self.channel_set,
             'sampling_rate': self.sampling_rate,
             'window_len': self.window_len,
             'step_len': self.step_len,
@@ -373,6 +438,10 @@ class DeployableBCIModel:
             window_len=info['window_len'], step_len=info['step_len'],
             confidence_threshold=info['confidence_threshold'],
             idle_distance_threshold=info['idle_distance_threshold'],
+            # Backward compatible: eski modellerde bu alan yok -> None
+            # (channels listesinin kendisi zaten doğru şekilde yüklendi,
+            # channel_set sadece hangi preset'ten geldiğinin bilgisidir).
+            channel_set=info.get('channel_set'),
         )
 
         # Fit edilmiş durumu geri yükle (CSP, feature_selector, classifier)
@@ -627,7 +696,7 @@ def _json_default(o):
 # MODE: train
 # ============================================================================
 
-def run_train(edf_path, events_path, output_dir, channels=('C3', 'C4', 'Cz'),
+def run_train(edf_path, events_path, output_dir, channel_set='motor3',
               window_len=3.0, step_len=0.25, idle_distance_threshold=3.5,
               confidence_threshold=0.6, n_features_select=5, lda_shrinkage=0.0,
               balance_classes='none', seed=42):
@@ -636,6 +705,10 @@ def run_train(edf_path, events_path, output_dir, channels=('C3', 'C4', 'Cz'),
     print("=" * 70)
 
     signals, info = read_edf(edf_path)
+
+    channels = resolve_channels(signals, channel_set)
+    print(f"[*] Channel set {channel_set}: {len(channels)} channels -> {channels}")
+
     events_all = parse_events(events_path)
     events = [(o, d, t) for o, d, t in events_all if t in COMMAND_LABEL_MAP]
     dropped = [(o, d, t) for o, d, t in events_all if t not in COMMAND_LABEL_MAP]
@@ -651,6 +724,7 @@ def run_train(edf_path, events_path, output_dir, channels=('C3', 'C4', 'Cz'),
         idle_distance_threshold=idle_distance_threshold,
         confidence_threshold=confidence_threshold,
         n_features_select=n_features_select, lda_shrinkage=lda_shrinkage,
+        channel_set=channel_set,
     )
 
     preprocessed = model.preprocess_continuous(signals)
@@ -678,6 +752,7 @@ def run_train(edf_path, events_path, output_dir, channels=('C3', 'C4', 'Cz'),
         f.write("=" * 50 + "\n")
         f.write(f"EDF: {edf_path}\n")
         f.write(f"Events: {events_path}\n")
+        f.write(f"Channel set: {channel_set}\n")
         f.write(f"Channels: {channels}\n")
         f.write(f"Sampling rate: {fs}\n")
         f.write(f"Train windows: {len(train_windows)} (STOP={stats['n_stop']}, WALK={stats['n_walk']})\n")
@@ -713,7 +788,7 @@ def _resolve_path(path, dataset_dir):
 
 
 def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
-                     channels=('C3', 'C4', 'Cz'), window_len=3.0, step_len=0.25,
+                     channel_set='motor3', window_len=3.0, step_len=0.25,
                      idle_distance_threshold=3.5, confidence_threshold=0.6,
                      n_features_select=5, lda_shrinkage=0.0,
                      balance_classes='none', balance_subjects='none', seed=42):
@@ -751,6 +826,7 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
     manifest_rows = []
     per_file_stats = []
     fs_reference = None
+    channels = None  # channel_set'ten İLK başarılı dosyada çözülecek, sonra sabit
     skipped_files = []
 
     for row in rows:
@@ -769,6 +845,12 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
             continue
 
         signals, info = read_edf(edf_path)
+
+        if channels is None:
+            # channel_set'i İLK başarıyla okunan dosyanın EDF kanal adlarına
+            # göre çöz - sonraki tüm dosyalar bu SABİT listeyle kontrol edilir.
+            channels = resolve_channels(signals, channel_set)
+            print(f"[*] Channel set {channel_set}: {len(channels)} channels -> {channels}")
 
         missing_channels = [ch for ch in channels if ch not in signals]
         if missing_channels:
@@ -802,6 +884,7 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
             idle_distance_threshold=idle_distance_threshold,
             confidence_threshold=confidence_threshold,
             n_features_select=n_features_select, lda_shrinkage=lda_shrinkage,
+            channel_set=channel_set,
         )
         preprocessed = temp_model.preprocess_continuous(signals)
 
@@ -921,6 +1004,7 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
         idle_distance_threshold=idle_distance_threshold,
         confidence_threshold=confidence_threshold,
         n_features_select=n_features_select, lda_shrinkage=lda_shrinkage,
+        channel_set=channel_set,
     )
     stats = model.train_from_trials(raw_trials, y_pooled)
     print(f"\n[+] Havuzlanmış eğitim tamamlandı: STOP={stats['n_stop']}, WALK={stats['n_walk']}")
@@ -945,6 +1029,7 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
         f.write(f"Final used training windows: {len(raw_trials)} "
                 f"(STOP={stats['n_stop']}, WALK={stats['n_walk']})\n")
         f.write(f"Candidate class imbalance ratio: {imbalance_ratio_candidate:.2f}:1\n")
+        f.write(f"Channel set: {channel_set}\n")
         f.write(f"Channels: {channels}\n")
         f.write(f"Sampling rate: {fs_reference}\n")
         f.write(f"CSP: {info_saved['use_csp']}, n_features_select: {info_saved['n_features_select']}, "
@@ -1430,6 +1515,10 @@ def main():
     parser.add_argument('--seed', type=int, default=42, help='Reproducible class balancing için seed')
     parser.add_argument('--smoothing-window', type=int, choices=[1, 3, 5], default=3,
                         help='Temporal smoothing window (1=no smoothing)')
+    parser.add_argument('--channel-set', choices=['motor3', 'motor5', 'motor9', 'motor13', 'all_eeg'],
+                        default='motor3',
+                        help='(train/train_multi only) EEG channel set to use. '
+                             'validate_timeline/predict always use the channels saved in the model.')
     args = parser.parse_args()
 
     logger.setLevel(logging.WARNING)
@@ -1438,6 +1527,7 @@ def main():
         if not args.edf or not args.events:
             raise SystemExit("--edf ve --events gerekli (train modu)")
         run_train(args.edf, args.events, args.output_dir,
+                   channel_set=args.channel_set,
                    idle_distance_threshold=args.idle_distance_threshold,
                    confidence_threshold=args.confidence_threshold,
                    n_features_select=args.n_features_select,
@@ -1448,6 +1538,7 @@ def main():
         if not args.dataset_list:
             raise SystemExit("--dataset-list gerekli (train_multi modu)")
         run_train_multi(args.dataset_list, args.output_dir, dataset_dir=args.dataset_dir,
+                         channel_set=args.channel_set,
                          idle_distance_threshold=args.idle_distance_threshold,
                          confidence_threshold=args.confidence_threshold,
                          n_features_select=args.n_features_select,
