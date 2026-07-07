@@ -1,0 +1,6 @@
+# Raw EEG data - keep out of git (size + subject privacy)
+*.edf
+*.npz
+*.npy
+__pycache__/
+*.pyc
