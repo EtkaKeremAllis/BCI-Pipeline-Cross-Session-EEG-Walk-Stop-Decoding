@@ -39,11 +39,11 @@ WALK / STOP / IDLE
 
 ## Currents Best Resluts
 
-| Scenario                    | Accuracy | Balanced Acc. |
-| --------------------------- | -------: | ------------: |
-| Seen session                |   90.00% |        88.10% |
-| Unseen session              |   80.20% |        75.87% |
-| Best unseen (Motor13 + SW5) |   73.57% |        68.76% |
+| Evaluation              | Configuration        |   Accuracy | Balanced Acc. |
+| ----------------------- | -------------------- | ---------: | ------------: |
+| **Seen session**        | Best configuration   | **90.00%** |    **88.10%** |
+| **Cross-session (4→5)** | Motor3 + z-score     | **71.73%** |    **71.59%** |
+| **Cross-session (7→8)** | Motor13 (no z-score) | **80.20%** |    **75.87%** |
 
 
 ## Main file
