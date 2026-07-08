@@ -14,6 +14,38 @@ system. It does not provide real-time EEG streaming or actual HID/vJoy
 control — every "joystick command" produced is a label derived from held-out
 (LOOCV) predictions on a fixed recording, written to the terminal/CSV.
 
+EEG (.edf)
+      │
+      ▼
+Preprocessing
+      │
+      ▼
+CSP
+      │
+      ▼
+Feature Selection
+      │
+      ▼
+Shrinkage LDA
+      │
+      ▼
+Sliding Window
+      │
+      ▼
+Temporal Smoothing
+      │
+      ▼
+WALK / STOP / IDLE
+
+## Currents Best Resluts
+
+| Scenario                    | Accuracy | Balanced Acc. |
+| --------------------------- | -------: | ------------: |
+| Seen session                |   90.00% |        88.10% |
+| Unseen session              |   80.20% |        75.87% |
+| Best unseen (Motor13 + SW5) |   73.57% |        68.76% |
+
+
 ## Main file
 - `bci_pipeline.py` — current version (v2.8): a single file, CLI-enabled, containing the entire pipeline.
 
