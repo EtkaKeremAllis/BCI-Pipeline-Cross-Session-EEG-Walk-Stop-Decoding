@@ -57,7 +57,7 @@ WALK / STOP / IDLE
 ## Early attempts (abandoned)
 - `production_grade_bci.py`, `realtime_eeg_motor_control.py`, `joystick_output.py` —
   the first approach, real-time, multi-threaded, based on vJoy/LSL. Due to its
-  complexity, this was pivoted to the offline validation + symbolic command
+  complexity, this was postponed to future updates, and pivoted to the offline validation + symbolic command
   approach (see CHANGELOG).
 
 ## Usage (current version)
