@@ -1,11 +1,13 @@
 # EEG Walk/Stop BCI Pipeline
 
 An offline BCI pipeline that classifies Walk/Stop command periods from C3/C4/Cz
-EEG recordings, controlling for EOG/movement artifact effects. The pipeline
+EEG recordings (you can choose more channels in the next versions), controlling for EOG/movement artifact effects. The pipeline
 uses CSP-based feature extraction, F-score feature selection, a
 shrinkage-regularized LDA classifier, and LOOCV / cross-session validation;
 it ultimately produces a symbolic joystick command (WALK/STOP/IDLE) from the
-held-out predictions.
+held-out predictions. Focus is producing real commands, based on Predictions.
+
+This repository documents the complete research process from early prototypes to the current pipeline.
 
 **Scope note:** This is an offline validation and symbolic command generation
 system. It does not provide real-time EEG streaming or actual HID/vJoy
