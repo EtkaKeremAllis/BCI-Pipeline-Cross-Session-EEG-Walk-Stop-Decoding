@@ -1,7 +1,7 @@
 # Changelog
 
 All versions move toward the goal of offline-classifying Walk/Stop intent from
-EEG (C3/C4/Cz) and producing a symbolic joystick command (WALK/STOP/IDLE).
+EEG and producing a symbolic joystick command (WALK/STOP/IDLE).
 
 ## Phase 0 — Real-time prototype (abandoned, pivoted to offline)
 - **Symbolic joystick output layer** — a console-based output layer for WALK/STOP/IDLE.
@@ -24,7 +24,7 @@ EEG (C3/C4/Cz) and producing a symbolic joystick command (WALK/STOP/IDLE).
 - **v1.1.1** — Model persistence, ROC curve + confusion matrix plots, TSV-first event parsing, `OutputDevice` abstraction.
 - **v2.0** — `train_validate` / `predict` mode split, vJoy/ViGEm output backends, command smoothing.
 
-## Phase 4 — v3 line (critical bug fix + iteration)
+## Phase 4 — v3.demo line (critical bug fix + iteration)
 - **v3.0** — **Critical fix**: the distribution of the training data (labeled event
   windows) didn't match the prediction data (sliding window over the continuous
   recording), causing model collapse. Redesigned `validate_timeline` mode, IDLE
@@ -34,7 +34,9 @@ EEG (C3/C4/Cz) and producing a symbolic joystick command (WALK/STOP/IDLE).
 - **v3.3** — Fine-tuned sliding window size/step: 5.0s/1.0s -> 3.0s/0.25s.
 - **v3.4** — Subject-level balancing + unlabeled prediction pipeline over the full recording (`run_unlabeled_prediction`).
 - **v3.5** — Temporal smoothing for predicted labels, timeline metrics, confusion matrix CSV export.
-- **v3.6 (current, latest)** — Flexible channel-set resolution (`resolve_channels`) instead of fixed C3/C4/Cz.
+
+## Phase 5 - v2 final series 
+- **v2.8 (current, latest)** — Flexible channel-set resolution (`resolve_channels`) instead of fixed C3/C4/Cz.
 
 ---
 
