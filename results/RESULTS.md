@@ -95,7 +95,10 @@ No cross-subject number is shown here until those folds have actually completed.
 
 ## Data and machine-readable files
 
-You can find detailed results in results file.
+Machine-readable outputs for each reciprocal evaluation are available in:
+
+- [`session01_to_session02/`](session01_to_session02/)
+- [`session02_to_session01/`](session02_to_session01/)
 
 ## Dataset attribution
 
