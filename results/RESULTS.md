@@ -85,6 +85,116 @@ The dataset contains seven participants and nine longitudinal sessions per parti
 
 No cross-subject number is shown here until those folds have actually completed. This avoids presenting a planned benchmark as measured evidence.
 
+## Reproduction
+
+### Exact commands for the reported frozen reciprocal benchmark
+
+Run these commands from the repository root in **Windows PowerShell**. They reproduce the two reported directions using the frozen configuration shown above.
+
+#### 1. Train on Session 01
+
+```powershell
+py .\bci_pipeline_v2.8.py `
+  --mode train `
+  --edf ".\sub-02_ses-01_task-training_eeg.edf" `
+  --events ".\sub-02_ses-01_task-training_acq-rexcommand_events.tsv" `
+  --output-dir ".\results\session01_to_session02\model" `
+  --channel-set motor3 `
+  --channel-normalization zscore `
+  --n-features-select 25 `
+  --lda-shrinkage 0.1 `
+  --balance-classes none `
+  --confidence-threshold 0.45 `
+  --idle-distance-threshold 999 `
+  --seed 42
+```
+
+#### 2. Validate Session 01 model on Session 02
+
+```powershell
+py .\bci_pipeline_v2.8.py `
+  --mode validate_timeline `
+  --edf ".\sub-02_ses-02_task-training_eeg.edf" `
+  --events ".\sub-02_ses-02_task-training_acq-rexcommand_events.tsv" `
+  --model ".\results\session01_to_session02\model" `
+  --output-dir ".\results\session01_to_session02" `
+  --smoothing-window 5 `
+  --confidence-threshold 0.45 `
+  --idle-distance-threshold 999
+```
+
+#### 3. Train on Session 02
+
+```powershell
+py .\bci_pipeline_v2.8.py `
+  --mode train `
+  --edf ".\sub-02_ses-02_task-training_eeg.edf" `
+  --events ".\sub-02_ses-02_task-training_acq-rexcommand_events.tsv" `
+  --output-dir ".\results\session02_to_session01\model" `
+  --channel-set motor3 `
+  --channel-normalization zscore `
+  --n-features-select 25 `
+  --lda-shrinkage 0.1 `
+  --balance-classes none `
+  --confidence-threshold 0.45 `
+  --idle-distance-threshold 999 `
+  --seed 42
+```
+
+#### 4. Validate Session 02 model on Session 01
+
+```powershell
+py .\bci_pipeline_v2.8.py `
+  --mode validate_timeline `
+  --edf ".\sub-02_ses-01_task-training_eeg.edf" `
+  --events ".\sub-02_ses-01_task-training_acq-rexcommand_events.tsv" `
+  --model ".\results\session02_to_session01\model" `
+  --output-dir ".\results\session02_to_session01" `
+  --smoothing-window 5 `
+  --confidence-threshold 0.45 `
+  --idle-distance-threshold 999
+```
+
+The validation command writes the original pipeline output names, including `timeline_metrics.json`, `validated_timeline.csv`, and the raw/smoothed confusion matrices. The committed example folders may use clearer presentation names such as `metrics.json` and `timeline_predictions.csv`; their numerical contents come from these validation runs.
+
+### Optional broader benchmark
+
+
+### 1. Download the required dataset subset
+
+On Windows PowerShell:
+
+```powershell
+.\scripts\download_benchmark_data.ps1
+```
+
+This downloads only the `task-training` EDF files and their `rexcommand` event TSV files, not the full dataset.
+
+### 2. Run the frozen benchmark
+
+```powershell
+.\scripts\run_benchmark.ps1
+```
+
+Or directly:
+
+```powershell
+py scripts/benchmark_cross_subject.py `
+  --dataset-root data/ds007788 `
+  --pipeline bci_pipeline_v2.8.py `
+  --output-root results/cross_subject_session `
+  --protocol all `
+  --resume
+```
+
+The runner writes:
+
+- `benchmark_results.csv` — one row per held-out recording
+- `benchmark_aggregate.csv` — subject/protocol-level means
+- `benchmark_results.json` — complete machine-readable output
+- `CROSS_SUBJECT_RESULTS.md` — a GitHub-renderable results table
+- per-fold logs, timelines, confusion matrices, and collapse reports
+
 ## Interpretation and limitations
 
 - The 77.95% figure is an **exploratory development estimate** because feature count, shrinkage, smoothing, and normalization were selected using the same two sessions.
@@ -95,10 +205,10 @@ No cross-subject number is shown here until those folds have actually completed.
 
 ## Data and machine-readable files
 
-Machine-readable outputs for each reciprocal evaluation are available in:
-
-- [`session01_to_session02/`](session01_to_session02/)
-- [`session02_to_session01/`](session02_to_session01/)
+- [`results/verified_sub02_cross_session.csv`](results/verified_sub02_cross_session.csv)
+- [`results/channel_set_comparison.csv`](results/channel_set_comparison.csv)
+- [`results/optimization_top10.csv`](results/optimization_top10.csv)
+- [`results/verified_results.json`](results/verified_results.json)
 
 ## Dataset attribution
 
