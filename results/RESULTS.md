@@ -85,43 +85,6 @@ The dataset contains seven participants and nine longitudinal sessions per parti
 
 No cross-subject number is shown here until those folds have actually completed. This avoids presenting a planned benchmark as measured evidence.
 
-## Reproduction
-
-### 1. Download the required dataset subset
-
-On Windows PowerShell:
-
-```powershell
-.\scripts\download_benchmark_data.ps1
-```
-
-This downloads only the `task-training` EDF files and their `rexcommand` event TSV files, not the full dataset.
-
-### 2. Run the frozen benchmark
-
-```powershell
-.\scripts\run_benchmark.ps1
-```
-
-Or directly:
-
-```powershell
-py scripts/benchmark_cross_subject.py `
-  --dataset-root data/ds007788 `
-  --pipeline bci_pipeline_v2.8.py `
-  --output-root results/cross_subject_session `
-  --protocol all `
-  --resume
-```
-
-The runner writes:
-
-- `benchmark_results.csv` — one row per held-out recording
-- `benchmark_aggregate.csv` — subject/protocol-level means
-- `benchmark_results.json` — complete machine-readable output
-- `CROSS_SUBJECT_RESULTS.md` — a GitHub-renderable results table
-- per-fold logs, timelines, confusion matrices, and collapse reports
-
 ## Interpretation and limitations
 
 - The 77.95% figure is an **exploratory development estimate** because feature count, shrinkage, smoothing, and normalization were selected using the same two sessions.
@@ -132,10 +95,7 @@ The runner writes:
 
 ## Data and machine-readable files
 
-- [`results/verified_sub02_cross_session.csv`](results/verified_sub02_cross_session.csv)
-- [`results/channel_set_comparison.csv`](results/channel_set_comparison.csv)
-- [`results/optimization_top10.csv`](results/optimization_top10.csv)
-- [`results/verified_results.json`](results/verified_results.json)
+You can find detailed results in results file.
 
 ## Dataset attribution
 
