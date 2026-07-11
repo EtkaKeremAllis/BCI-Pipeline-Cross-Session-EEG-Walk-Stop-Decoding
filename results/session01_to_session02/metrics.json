@@ -1,5 +1,5 @@
 {
-  "edf": "/mnt/data/bci_ui_test/ses02_eeg.edf",
+  "edf": "sub-02/ses-02/eeg",
   "sampling_rate": 100.0,
   "channel_normalization": "zscore",
   "signal_len_samples": 24798,
@@ -7,7 +7,7 @@
   "window_len": 3.0,
   "step_len": 0.25,
   "n_windows": 980,
-  "events": "/mnt/data/bci_ui_test/ses02_events.tsv",
+  "events": "sub-02/ses-02/events",
   "validation_available": true,
   "accuracy_computed": true,
   "smoothing_window": 5,
@@ -69,9 +69,9 @@
         "support": 366
       },
       "IDLE": {
-        "precision": NaN,
-        "recall": NaN,
-        "f1": NaN,
+        "precision": null,
+        "recall": null,
+        "f1": null,
         "support": 0
       }
     },
@@ -103,9 +103,9 @@
       "support": 366
     },
     "IDLE": {
-      "precision": NaN,
-      "recall": NaN,
-      "f1": NaN,
+      "precision": null,
+      "recall": null,
+      "f1": null,
       "support": 0
     }
   },
