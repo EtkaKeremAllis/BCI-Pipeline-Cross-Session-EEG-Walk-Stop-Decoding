@@ -1,0 +1,36 @@
+{
+  "onset": {
+    "Description": "Onset (in seconds) of the event, measured from the beginning of the acquisition of the first data point stored in the corresponding task data file.",
+    "Units": "s"
+  },
+  "duration": {
+    "Description": "Duration of the event (measured from onset) in seconds.",
+    "Units": "s"
+  },
+  "trial_type": {
+    "LongName": "Event category for rexCommand.",
+    "Description": "rexCommand (Command) provided to Exoskeleton(Rex)",
+    "Levels": {
+      "x99": "99: Idle",
+      "x5": "5: Stop",
+      "x8": "8: Walk"
+    }
+  },
+  "ProcessingParam": {
+    "TaskName": {
+      "Value": "ses-01-task-training"
+    },
+    "SamplingFrequency": {
+      "Value": 100
+    },
+    "RecordingDate": {
+      "Value": "2015-08-14"
+    },
+    "StartTime": {
+      "Value": 0
+    },
+    "RecordingDuration": {
+      "Value": 247.98
+    }
+  }
+}

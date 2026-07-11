@@ -1,0 +1,16 @@
+{
+  "TaskName": "ses-01-task-training",
+  "SamplingFrequency": 100,
+  "PowerLineFrequency": 60,
+  "EEGReference": "Ref",
+  "EEGGround": "Gnd",
+  "EEGPlacementScheme": "10-20",
+  "EEGChannelCount": 60,
+  "EOGChannelCount": 4,
+  "Manufacturer": "MOVE System",
+  "CapManufacturer": "actiCAP",
+  "SoftwareFilters": "n/a",
+  "RecordingType": "continuous",
+  "RecordingDuration": 247.98,
+  "TaskDescription": "Recorded on: 2015-08-14 during \"ses-01-task-training\""
+}
