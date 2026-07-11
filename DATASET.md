@@ -22,6 +22,7 @@ Identified from the data itself: the EDF header `recording_id` field reads `MOVE
 - **EOG:** 4 channels — `EOG_HL`, `EOG_HR`, `EOG_VA`, `EOG_VB` (horizontal left/right, vertical A/B).
 - **Sampling rate:** 100 Hz (native, not downsampled by this pipeline).
 - **Power line frequency:** 60 Hz.
+- **File format:** plain EDF (16-bit samples), not EDF+ and not BDF — confirmed by inspecting the raw header byte-by-byte (`reserved` field is blank, not `EDF+C`/`EDF+D`; the version byte is `0`, not BioSemi's `0xFF`). `edf_reader.py` now explicitly rejects BDF and EDF+ files (raises `ValueError`) instead of silently mis-parsing them, since it has only been verified against this dataset's plain-EDF files.
 - Full 64-channel list (order as stored in the EDF):
   `Fp1, Fp2, F7, F3, Fz, F4, F8, FC5, FC1, FC2, FC6, T7, C3, Cz, C4, T8, EOG_HL, CP5, CP1, CP2, CP6, EOG_HR, P7, P3, Pz, P4, P8, EOG_VA, O1, Oz, O2, EOG_VB, AF7, AF3, AF4, AF8, F5, F1, F2, F6, AFz, FT7, FC3, FC4, FT8, FCz, C5, C1, C2, C6, TP7, CP3, CPz, CP4, TP8, P5, P1, P2, P6, PO7, PO3, POz, PO4, PO8`
 
