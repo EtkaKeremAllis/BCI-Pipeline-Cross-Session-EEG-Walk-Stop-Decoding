@@ -63,6 +63,13 @@ Cross-session results refer to training and testing on different recording sessi
 
 ---
 
+## Acknowledgements
+I used OpenNeuro website.
+
+Shantanu Sarkar, Kevin Nathan, and Jose L. Contreras-Vidal (2026). Dataset: EEG-Controlled Exoskeleton for Walking and Standing - A Longitudinal Study of Healthy Individuals. OpenNeuro. [Dataset] doi: doi:10.18112/openneuro.ds007788.v1.0.1
+
+---
+
 ## Main files
 
 ```text
@@ -764,4 +771,4 @@ Those versions explored real-time, multi-threaded LSL/vJoy control. Development 
 
 # License and citation
 
-Add the repository license and preferred citation information here.
+APACHI 2.0
