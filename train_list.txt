@@ -1,0 +1,2 @@
+subject,session,edf,events
+sub-02,ses-01,D:\Bci\sub-02_ses-01_task-training_eeg.edf,D:\Bci\sub-02_ses-01_task-training_acq-rexcommand_events.tsv
