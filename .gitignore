@@ -1,6 +1,12 @@
-# Raw EEG data - keep out of git (size + subject privacy)
-*.edf
+# Trained model artifacts - derived from training, not source data,
+# regenerable by re-running the pipeline. Keep out of git.
 *.npz
 *.npy
 __pycache__/
 *.pyc
+
+# Note: raw EEG (*.edf) is intentionally versioned in this repo (see
+# DATASET.md) - it's public-domain (CC0) OpenNeuro data, not private
+# subject data. Keep additions to short calibration-task recordings
+# (few MB each); avoid committing full closed-loop/6-minute session
+# blocks in bulk, to keep repo size reasonable.
