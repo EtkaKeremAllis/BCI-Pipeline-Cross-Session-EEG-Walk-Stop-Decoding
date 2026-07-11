@@ -24,7 +24,7 @@ EEG and producing a symbolic joystick command (WALK/STOP/IDLE).
 - **v1.1.1** — Model persistence, ROC curve + confusion matrix plots, TSV-first event parsing, `OutputDevice` abstraction.
 - **v2.0** — `train_validate` / `predict` mode split, vJoy/ViGEm output backends, command smoothing.
 
-## Phase 4 — v3.demo line (critical bug fix + iteration)
+## Phase 4 — v3.demo line 'experimental' (critical bug fix + iteration)
 - **v3.0** — **Critical fix**: the distribution of the training data (labeled event
   windows) didn't match the prediction data (sliding window over the continuous
   recording), causing model collapse. Redesigned `validate_timeline` mode, IDLE
@@ -36,7 +36,13 @@ EEG and producing a symbolic joystick command (WALK/STOP/IDLE).
 - **v3.5** — Temporal smoothing for predicted labels, timeline metrics, confusion matrix CSV export.
 
 ## Phase 5 - v2 final series 
-- **v2.8 (current, latest)** — Flexible channel-set resolution (`resolve_channels`) instead of fixed C3/C4/Cz.
+- 
+**v2.8**
+• Flexible channel-set selection (motor3 / motor5 / motor9 / motor13 / all_eeg)
+• Temporal smoothing
+• Timeline metrics and confusion-matrix export
+• Optional per-channel z-score normalization
+• Model metadata improvements and backward compatibility
 
 ---
 
