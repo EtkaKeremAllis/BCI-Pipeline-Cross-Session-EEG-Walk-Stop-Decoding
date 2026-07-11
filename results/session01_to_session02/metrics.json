@@ -33,9 +33,9 @@
         "support": 366
       },
       "IDLE": {
-        "precision": NaN,
-        "recall": NaN,
-        "f1": NaN,
+        "precision": Null,
+        "recall": Null,
+        "f1": Null,
         "support": 0
       }
     },
