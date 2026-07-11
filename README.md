@@ -1,220 +1,217 @@
 # EEG Walk/Stop BCI Pipeline
 
-An offline EEG-based Brain–Computer Interface pipeline for classifying **WALK** and **STOP** command periods and producing symbolic **WALK / STOP / IDLE** outputs.
+An offline EEG-based brain-computer interface (BCI) pipeline for classifying **WALK** and **STOP** command periods and producing symbolic **WALK / STOP / IDLE** outputs.
 
-The pipeline supports configurable motor-cortex channel sets, per-channel normalization, CSP-based feature extraction, F-score feature selection, shrinkage-regularized LDA classification, full-record sliding-window validation, temporal smoothing, single-session training, and pooled multi-session or multi-subject training.
+The current implementation is `bci_pipeline_v2.8.py`. It supports single-session and pooled multi-session training, full-record timeline validation, and prediction on unlabeled EDF recordings. A dependency-free local Web UI is also included.
 
-A local browser-based Web UI is included so the pipeline can be configured and started without manually writing terminal commands.
+> [!IMPORTANT]
+> This repository implements an offline research pipeline. It does not provide real-time EEG streaming, HID control, or vJoy output. Predictions are generated from fixed EEG recordings and saved to files.
 
-> **Scope note**
->
-> This is an offline validation and symbolic command-generation system. It does not currently provide real-time EEG streaming or direct HID/vJoy control. Every command is generated from predictions on a fixed EEG recording and is written to output files and/or the terminal.
+## Scientific scope
 
----
+The pipeline predicts command periods under conditions represented in the training data. Its outputs must not be interpreted as proof of artifact-free or purely brain-internal walking-intention decoding. Performance can be affected by subject identity, session variability, electrode placement, movement and EOG artifacts, preprocessing, class balance, and model-selection choices.
 
-## Pipeline overview
+Use the following terminology when reporting results:
 
-```text
-EEG recording (.edf)
-        │
-        ▼
-Per-channel normalization
-(none or z-score)
-        │
-        ▼
-Preprocessing
-        │
-        ▼
-CSP
-        │
-        ▼
-Feature extraction
-        │
-        ▼
-F-score feature selection
-        │
-        ▼
-Shrinkage LDA
-        │
-        ▼
-Full-record sliding windows
-        │
-        ▼
-Confidence / IDLE gating
-        │
-        ▼
-Temporal smoothing
-        │
-        ▼
-WALK / STOP / IDLE
-```
+- **Seen-session validation:** the evaluated recording was represented during training or model development.
+- **Cross-session validation:** training and test recordings come from different sessions.
+- **Cross-subject validation:** the test subject is completely excluded from training and model selection.
+- **Target-session calibrated performance:** the target session influenced preprocessing, threshold, channel, or model selection.
 
----
+Repeatedly selecting settings on a target session makes that session part of model development. Use a separate untouched recording for an unbiased final evaluation.
 
-## Current best results
-
-| Evaluation | Configuration | Accuracy | Balanced accuracy |
-|---|---|---:|---:|
-| **Seen session** | Best configuration | **90.00%** | **88.10%** |
-| **Cross-session: sessions 1–4 → 5** | Motor3 + z-score | **71.73%** | **71.59%** |
-| **Cross-session: sessions 1–7 → 8** | Motor13, no z-score | **80.20%** | **75.87%** |
-
-Cross-session results refer to training and testing on different recording sessions. They should not be described as cross-subject results unless the held-out recording belongs to a subject who was not included during training.
-
----
-
-## Acknowledgements
-I used OpenNeuro website.
-
-Shantanu Sarkar, Kevin Nathan, and Jose L. Contreras-Vidal (2026). Dataset: EEG-Controlled Exoskeleton for Walking and Standing - A Longitudinal Study of Healthy Individuals. OpenNeuro. [Dataset] doi: doi:10.18112/openneuro.ds007788.v1.0.1
-
----
-
-## Main files
+## Pipeline
 
 ```text
-bci_pipeline.py
-bci_web_ui.py
-modern_bci_v2.py
-edf_reader.py
-parse_events.py
-CHANGELOG.md
+EDF recording
+    -> selected EEG channels
+    -> optional per-recording channel z-score normalization
+    -> signal preprocessing
+    -> labeled command windows (training) or sliding windows (inference)
+    -> CSP
+    -> feature extraction
+    -> F-score feature selection
+    -> shrinkage LDA
+    -> confidence and IDLE gating
+    -> optional temporal smoothing
+    -> WALK / STOP / IDLE
 ```
 
-- `bci_pipeline.py` — main CLI entry point for training, multi-session training, timeline validation, and unlabeled prediction.
-- `bci_web_ui.py` — local browser interface that builds and runs the same CLI commands.
-- `modern_bci_v2.py` — signal-processing and classification components.
-- `edf_reader.py` — EDF loading utilities.
-- `parse_events.py` — event-file parser.
-- `CHANGELOG.md` — version history and experiment-related changes.
+Continuous recordings are processed independently. In multi-session training, recordings are not concatenated; only extracted command-window trials are pooled.
 
-Some versions use the filename `bci_pipeline_v2.8.py`. Select the correct file in the Web UI's **Pipeline script path** field.
+## Repository files
 
----
+| File | Purpose |
+|---|---|
+| `bci_pipeline_v2.8.py` | Main command-line pipeline |
+| `bci_web_ui.py` | Local browser interface for the pipeline |
+| `modern_bci_v2.py` | CSP, feature extraction, feature selection, and LDA components |
+| `edf_reader.py` | EDF loading utilities |
+| `parse_events.py` | BIDS-style TSV and legacy PDF event parsing |
+| `CHANGELOG.md` | Development history |
 
-# Web UI
+## Requirements
 
-## What the Web UI does
+- Python 3.9 or newer
+- NumPy
+- SciPy
+- `pdfplumber` only when reading legacy PDF event files
 
-The Web UI provides controls for:
-
-- Single-session training
-- Multi-session or multi-subject training
-- Timeline validation with ground-truth events
-- Unlabeled full-record prediction
-- Channel-set selection
-- Raw-channel normalization selection
-- Feature-count selection
-- Confidence and IDLE thresholds
-- Class and subject balancing
-- Temporal smoothing
-- Percentage-based result visualization
-- Experiment summary display
-- Raw and smoothed confusion matrices
-- Ground-truth / raw / smoothed prediction timeline
-- Output-file downloads
-- Dataset-list generation for multi-session training
-
-The Web UI does not replace or modify the machine-learning pipeline. It starts the existing Python pipeline as a local child process using the selected settings.
-
-EEG data is processed locally and is not uploaded by the interface.
-
----
-
-## Start the Web UI
-
-Keep the UI and pipeline files in the same project folder:
-
-```text
-project/
-├── bci_web_ui.py
-├── bci_pipeline.py
-├── modern_bci_v2.py
-├── edf_reader.py
-├── parse_events.py
-└── ...
-```
-
-Open PowerShell or a terminal in that folder.
-
-### Windows
-
-```powershell
-py -X utf8 bci_web_ui.py
-```
-
-### Linux / macOS
+Install the required packages in a virtual environment:
 
 ```bash
-python3 bci_web_ui.py
+python -m venv .venv
 ```
 
-Then open:
-
-```text
-http://127.0.0.1:8765
-```
-
-To stop the server, return to the terminal and press:
-
-```text
-Ctrl+C
-```
-
-Restart the server after replacing or editing `bci_web_ui.py`.
-
----
-
-## Web UI modes
-
-| Mode | Purpose | Required inputs |
-|---|---|---|
-| **Train** | Train one model from one labeled recording | EDF, events, output directory |
-| **Train multi-session** | Train one pooled model from multiple recording rows | Dataset-list file, output directory |
-| **Validate timeline** | Evaluate a saved model on a full labeled recording | EDF, events, model directory, output directory |
-| **Predict unlabeled timeline** | Run a saved model without ground-truth events | EDF, model directory, output directory |
-
----
-
-# Single-session training
-
-In the Web UI:
-
-1. Select **Train**.
-2. Select the pipeline script.
-3. Enter the labeled training EDF path.
-4. Enter the corresponding events-file path.
-5. Choose an output directory for the model.
-6. Select the channel set.
-7. Select `zscore` or `none` for channel normalization.
-8. Set the selected feature count, confidence threshold, balancing option, and other parameters.
-9. Press **Start pipeline**.
-
-Typical settings:
-
-```text
-Channel set: motor3 / motor5 / motor9 / motor13
-Channel normalization: zscore
-Selected feature count: 45
-Confidence threshold: 0.45
-IDLE distance threshold: 999
-```
-
-Equivalent CLI example:
+Windows PowerShell:
 
 ```powershell
-py -X utf8 bci_pipeline.py `
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install numpy scipy pdfplumber
+```
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install numpy scipy pdfplumber
+```
+
+`pdfplumber` may be omitted if all event files are TSV files.
+
+## Command-line interface
+
+Show the complete interface:
+
+```bash
+python bci_pipeline_v2.8.py --help
+```
+
+The available modes are:
+
+| Mode | Required inputs | Purpose |
+|---|---|---|
+| `train` | `--edf`, `--events`, `--output-dir` | Train from one labeled recording |
+| `train_multi` | `--dataset-list`, `--output-dir` | Train from pooled labeled recordings |
+| `validate_timeline` | `--edf`, `--model`, `--output-dir` | Run full-record inference; evaluate when `--events` is supplied |
+| `predict` | `--edf`, `--model`, `--output-dir` | Predict a full recording without ground truth |
+
+### Event labels
+
+The default mapping is:
+
+```text
+x5 -> STOP (0)
+x8 -> WALK (1)
+```
+
+Use `--label-map` for another dataset. It accepts either a JSON object or the path to a JSON file:
+
+```powershell
+--label-map '{"stop":0,"walk":1}'
+```
+
+The selected mapping is saved with the model and reused during validation and prediction.
+
+## Single-session training
+
+```powershell
+python bci_pipeline_v2.8.py `
   --mode train `
-  --edf "D:\BCI\data\sub-02_ses-01_task-training_eeg.edf" `
-  --events "D:\BCI\data\sub-02_ses-01_task-training_events.tsv" `
-  --output-dir "D:\BCI\results\sub-02_ses-01_model" `
+  --edf "D:\BCI\data\session01_eeg.edf" `
+  --events "D:\BCI\data\session01_events.tsv" `
+  --output-dir "D:\BCI\results\session01_model" `
   --channel-set motor9 `
   --channel-normalization zscore `
   --n-features-select 45 `
-  --confidence-threshold 0.45
+  --confidence-threshold 0.45 `
+  --balance-classes none `
+  --seed 42
 ```
 
-A trained model directory normally contains:
+The event file must be a BIDS-style TSV with these columns:
+
+```text
+onset    duration    trial_type
+```
+
+Legacy PDF event exports are supported when `pdfplumber` is installed.
+
+## Multi-session training
+
+Create a comma-separated dataset list with exactly these columns:
+
+```csv
+subject,session,edf,events
+sub-01,ses-01,data/sub-01_ses-01_eeg.edf,data/sub-01_ses-01_events.tsv
+sub-01,ses-02,data/sub-01_ses-02_eeg.edf,data/sub-01_ses-02_events.tsv
+sub-02,ses-01,data/sub-02_ses-01_eeg.edf,data/sub-02_ses-01_events.tsv
+```
+
+Relative paths are resolved against `--dataset-dir`:
+
+```powershell
+python bci_pipeline_v2.8.py `
+  --mode train_multi `
+  --dataset-list "D:\BCI\train_list.csv" `
+  --dataset-dir "D:\BCI" `
+  --output-dir "D:\BCI\results\pooled_model" `
+  --channel-set motor9 `
+  --channel-normalization zscore `
+  --n-features-select 45 `
+  --balance-classes downsample `
+  --balance-subjects downsample `
+  --seed 42
+```
+
+Each usable recording must contain the selected channels and use the same sampling rate. Invalid rows are skipped with an explanation.
+
+Supported balancing settings:
+
+- `--balance-classes none`
+- `--balance-classes downsample`
+- `--balance-subjects none`
+- `--balance-subjects downsample`
+
+Although the parser currently accepts `--balance-classes class_weight`, class weighting is not implemented in v2.8. Do not use it.
+
+## Timeline validation
+
+Supply an events file to calculate timeline metrics:
+
+```powershell
+python bci_pipeline_v2.8.py `
+  --mode validate_timeline `
+  --edf "D:\BCI\data\session02_eeg.edf" `
+  --events "D:\BCI\data\session02_events.tsv" `
+  --model "D:\BCI\results\session01_model" `
+  --output-dir "D:\BCI\results\session01_to_session02" `
+  --event-overlap-threshold 0.5 `
+  --smoothing-window 3
+```
+
+`--events` is optional in this mode. Without it, the pipeline saves predictions but cannot calculate accuracy.
+
+Validation and prediction always reuse the channel list, normalization mode, sampling rate, and label mapping stored with the trained model.
+
+## Unlabeled prediction
+
+```powershell
+python bci_pipeline_v2.8.py `
+  --mode predict `
+  --edf "D:\BCI\data\unlabeled_eeg.edf" `
+  --model "D:\BCI\results\pooled_model" `
+  --output-dir "D:\BCI\results\prediction" `
+  --smoothing-window 3
+```
+
+Accuracy cannot be calculated without ground-truth events.
+
+## Model and result files
+
+A trained model directory contains model state and metadata such as:
 
 ```text
 trained_model.npz
@@ -223,337 +220,14 @@ selected_features.json
 training_summary.txt
 ```
 
----
-
-# Multi-session training
-
-Multi-session training uses a dataset-list file containing one row for every EDF/events pair.
-
-The required columns are exactly:
-
-```text
-subject,session,edf,events
-```
-
-## Supported dataset-list filenames
-
-The recommended filename is:
-
-```text
-train_list.csv
-```
-
-However, this also works:
-
-```text
-train_list.txt
-```
-
-> **Note:** The filename extension is not important. The pipeline reads the file as comma-separated data. A `.txt` file works as long as it contains CSV-formatted content and the exact header `subject,session,edf,events`.
-
-For example, both of these are valid:
-
-```text
-D:\BCI\train_list.csv
-D:\BCI\train_list.txt
-```
-
----
-
-## 1. Create the dataset-list file manually
-
-### Example using absolute Windows paths
-
-```csv
-subject,session,edf,events
-sub-01,ses-01,D:\BCI\data\sub-01_ses-01_task-training_eeg.edf,D:\BCI\data\sub-01_ses-01_task-training_events.tsv
-sub-01,ses-02,D:\BCI\data\sub-01_ses-02_task-training_eeg.edf,D:\BCI\data\sub-01_ses-02_task-training_events.tsv
-sub-02,ses-01,D:\BCI\data\sub-02_ses-01_task-training_eeg.edf,D:\BCI\data\sub-02_ses-01_task-training_events.tsv
-```
-
-The `subject` and `session` values preserve provenance and are used for subject-level summaries and optional subject balancing.
-
-Each row must point to a matching EEG recording and events file.
-
-### Example using relative paths
-
-Project layout:
-
-```text
-D:\BCI\
-├── bci_pipeline.py
-├── bci_web_ui.py
-├── train_list.csv
-└── data\
-    ├── sub-01_ses-01_eeg.edf
-    ├── sub-01_ses-01_events.tsv
-    ├── sub-01_ses-02_eeg.edf
-    └── sub-01_ses-02_events.tsv
-```
-
-Dataset-list content:
-
-```csv
-subject,session,edf,events
-sub-01,ses-01,data\sub-01_ses-01_eeg.edf,data\sub-01_ses-01_events.tsv
-sub-01,ses-02,data\sub-01_ses-02_eeg.edf,data\sub-01_ses-02_events.tsv
-```
-
-Set **Dataset base directory** to:
-
-```text
-D:\BCI
-```
-
-The pipeline combines the base directory with relative paths that cannot already be resolved.
-
----
-
-## 2. Create the dataset list in the Web UI
-
-The Web UI includes a **Dataset-list generator**.
-
-1. Open the **Train multi-session** mode.
-2. Open the dataset-list generator section.
-3. Add one row per recording.
-4. Enter:
-   - Subject
-   - Session
-   - EDF path
-   - Events path
-5. Add more rows as needed.
-6. Remove incorrect rows with the row delete control.
-7. Export the generated file.
-8. Save it as `train_list.csv` or `train_list.txt`.
-9. Use the saved path in **Dataset list**.
-
-Example rows:
-
-| Subject | Session | EDF | Events |
-|---|---|---|---|
-| sub-01 | ses-01 | `D:\BCI\data\sub-01_ses-01_eeg.edf` | `D:\BCI\data\sub-01_ses-01_events.tsv` |
-| sub-01 | ses-02 | `D:\BCI\data\sub-01_ses-02_eeg.edf` | `D:\BCI\data\sub-01_ses-02_events.tsv` |
-| sub-02 | ses-01 | `D:\BCI\data\sub-02_ses-01_eeg.edf` | `D:\BCI\data\sub-02_ses-01_events.tsv` |
-
----
-
-## 3. Create the file in Notepad
-
-1. Open Notepad.
-2. Paste the header and session rows.
-3. Select **File → Save As**.
-4. Use either:
-
-```text
-train_list.csv
-```
-
-or:
-
-```text
-train_list.txt
-```
-
-5. Set **Save as type** to:
-
-```text
-All files (*.*)
-```
-
-6. Select UTF-8 encoding.
-7. Confirm that Windows did not append another extension such as `.txt`.
-
-PowerShell check:
-
-```powershell
-Get-Content "D:\BCI\train_list.txt" -First 10
-```
-
-Expected beginning:
-
-```text
-subject,session,edf,events
-sub-01,ses-01,...
-```
-
----
-
-## 4. Create the file in Excel
-
-Create four columns:
-
-| subject | session | edf | events |
-|---|---|---|---|
-| sub-01 | ses-01 | `D:\BCI\data\sub-01_ses-01_eeg.edf` | `D:\BCI\data\sub-01_ses-01_events.tsv` |
-| sub-01 | ses-02 | `D:\BCI\data\sub-01_ses-02_eeg.edf` | `D:\BCI\data\sub-01_ses-02_events.tsv` |
-
-Save as:
-
-```text
-CSV UTF-8 (Comma delimited) (*.csv)
-```
-
-Do not save it as an `.xlsx` workbook.
-
----
-
-## 5. Start multi-session training from the Web UI
-
-1. Select **Train multi-session**.
-2. Enter the `train_list.csv` or `train_list.txt` path in **Dataset list**.
-3. Set **Dataset base directory**:
-   - Use `.` when every path in the list is absolute.
-   - Use the parent dataset folder when the list contains relative paths.
-4. Choose the channel set.
-5. Choose channel normalization.
-6. Select class balancing and subject balancing if required.
-7. Choose the model output directory.
-8. Press **Start pipeline**.
-
-Recommended first run:
-
-```text
-Channel set: motor3
-Channel normalization: zscore
-Class balancing: none
-Subject balancing: none
-Selected feature count: 45
-Seed: 42
-```
-
-Use different output directories when comparing configurations.
-
----
-
-## Multi-session CLI example
-
-Using `.csv`:
-
-```powershell
-py -X utf8 bci_pipeline.py `
-  --mode train_multi `
-  --dataset-list "D:\BCI\train_list.csv" `
-  --dataset-dir "D:\BCI" `
-  --output-dir "D:\BCI\results\multi_model" `
-  --channel-set motor9 `
-  --channel-normalization zscore `
-  --n-features-select 45 `
-  --confidence-threshold 0.45 `
-  --balance-classes none `
-  --balance-subjects none `
-  --seed 42
-```
-
-Using `.txt`:
-
-```powershell
-py -X utf8 bci_pipeline.py `
-  --mode train_multi `
-  --dataset-list "D:\BCI\train_list.txt" `
-  --dataset-dir "D:\BCI" `
-  --output-dir "D:\BCI\results\multi_model" `
-  --channel-set motor9 `
-  --channel-normalization zscore
-```
-
-### Balancing options
-
-Class balancing:
-
-```text
-none
-downsample
-```
-
-Subject balancing:
-
-```text
-none
-downsample
-```
-
-`class_weight` may appear as a CLI option in some versions, but it is not implemented in v2.8. Use `none` or `downsample`.
-
----
-
-## How multi-session pooling works
-
-Continuous EEG recordings are **not concatenated** across sessions.
-
-Instead:
-
-1. Every recording is loaded independently.
-2. Per-channel normalization is calculated independently for that recording.
-3. Every recording is preprocessed independently.
-4. Labeled WALK/STOP command windows are extracted independently.
-5. The already-epoched trials are pooled.
-6. One CSP + feature-selection + LDA model is trained from the pooled trials.
-
-This avoids continuous-signal boundaries and normalization statistics leaking across separate recordings.
-
----
-
-## Multi-session requirements
-
-For a row to be used:
-
-- The EDF file must exist.
-- The events file must exist and be readable by `parse_events.py`.
-- The events file must contain usable `x5` and/or `x8` labels.
-- Required channels for the selected channel set must exist.
-- Sampling rate must match the other recordings used in the same model.
-
-Current command labels:
-
-```text
-x5 → STOP
-x8 → WALK
-```
-
-A row that cannot be used is skipped with an explanation in the terminal output.
-
-Multi-session output additionally includes:
+Multi-session training also writes provenance files:
 
 ```text
 train_manifest_resolved.csv
 train_manifest_used.csv
-training_summary.txt
 ```
 
-- `train_manifest_resolved.csv` contains candidate windows before balancing.
-- `train_manifest_used.csv` contains the windows that actually entered training.
-- `training_summary.txt` records used files, skipped files, class counts, subject distribution, and settings.
-
----
-
-# Timeline validation
-
-Use **Validate timeline** to test a trained model on a complete recording with ground-truth events.
-
-In the Web UI:
-
-1. Select **Validate timeline**.
-2. Select the test EDF.
-3. Select the matching events file.
-4. Select the trained model directory.
-5. Choose a separate output directory.
-6. Select smoothing window `1`, `3`, or `5`.
-7. Press **Start pipeline**.
-
-Example:
-
-```powershell
-py -X utf8 bci_pipeline.py `
-  --mode validate_timeline `
-  --edf "D:\BCI\data\sub-02_ses-02_task-training_eeg.edf" `
-  --events "D:\BCI\data\sub-02_ses-02_task-training_events.tsv" `
-  --model "D:\BCI\results\sub-02_ses-01_model" `
-  --output-dir "D:\BCI\results\ses-01_to_ses-02_validation" `
-  --event-overlap-threshold 0.5 `
-  --smoothing-window 3
-```
-
-Typical validation outputs:
+Timeline modes can produce:
 
 ```text
 validated_timeline.csv
@@ -561,50 +235,16 @@ timeline_metrics.json
 timeline_confusion_matrix_raw.csv
 timeline_confusion_matrix_smoothed.csv
 timeline_confusion_matrix.csv
-collapse_report.txt
-```
-
-Important metrics include:
-
-- Deployment accuracy on non-IDLE ground-truth windows
-- Balanced accuracy
-- WALK recall
-- STOP recall
-- IDLE false-positive rate
-- Raw and smoothed prediction distributions
-- Collapse warning
-- STOP/WALK/IDLE confusion matrices
-
----
-
-# Unlabeled prediction
-
-Use **Predict unlabeled timeline** when no ground-truth event file is available.
-
-```powershell
-py -X utf8 bci_pipeline.py `
-  --mode predict `
-  --edf "D:\BCI\data\unlabeled_recording.edf" `
-  --model "D:\BCI\results\multi_model" `
-  --output-dir "D:\BCI\results\unlabeled_prediction" `
-  --smoothing-window 3
-```
-
-Typical outputs:
-
-```text
 predicted_timeline.csv
 prediction_summary.json
 collapse_report.txt
 ```
 
-Accuracy cannot be calculated without ground truth.
+Exact outputs depend on the selected mode and whether ground truth is available.
 
----
+## Channel and preprocessing options
 
-# Channel sets
-
-Available presets:
+Channel presets:
 
 ```text
 motor3
@@ -614,161 +254,63 @@ motor13
 all_eeg
 ```
 
-The selected channel set is used during training and stored in model metadata. Validation and prediction use the channels saved in the trained model.
-
-Changing the channel set requires training a new model because the CSP and feature spaces change.
-
----
-
-# Channel normalization
-
-Available settings:
+Normalization modes:
 
 ```text
 none
 zscore
 ```
 
-With `zscore`, every selected raw EEG channel is normalized independently for the current recording before bandpass filtering and CSP:
+With `zscore`, each selected raw EEG channel is normalized independently for its recording before filtering and CSP:
 
 ```text
 x_normalized = (x - channel_mean) / channel_std
 ```
 
-The normalization mode is stored with the model and reused during validation and prediction.
+Changing the channel set or normalization mode requires training a new model.
 
-Changing normalization requires training a new model.
+Temporal smoothing accepts windows `1`, `3`, or `5`; `1` disables smoothing.
 
----
+## Web UI
 
-# Recommended experiment organization
-
-Use a separate output directory for every configuration:
-
-```text
-results/
-├── motor3_zscore_model/
-├── motor9_zscore_model/
-├── motor13_none_model/
-├── ses01_to_ses02_validation/
-└── unlabeled_prediction/
-```
-
-Do not overwrite the same model directory while comparing configurations.
-
----
-
-# Troubleshooting
-
-## `ModuleNotFoundError: No module named 'parse_events'`
-
-Keep the required modules in the same project folder:
-
-```text
-bci_pipeline.py
-parse_events.py
-edf_reader.py
-modern_bci_v2.py
-```
-
-## `No /Root object! - Is this really a PDF?`
-
-The parser is trying to open a non-PDF file with a PDF reader.
-
-For a TSV events file, confirm:
+Start the local interface from the repository directory:
 
 ```powershell
-Get-Content "D:\BCI\data\events.tsv" -First 5
+python bci_web_ui.py
 ```
 
-Expected content:
+Then open <http://127.0.0.1:8765>.
 
-```text
-onset  duration  trial_type
-0      59        x5
-59     12.5      x8
-```
+The UI runs `bci_pipeline_v2.8.py` as a local child process. EEG data is processed locally and is not uploaded by the interface. Stop the server with `Ctrl+C`.
 
-Make sure `parse_events.py` detects `.tsv` and reads it as text instead of always calling a PDF parser.
+## Reporting results
 
-## `No usable x5/x8 events`
+For every reported result, record at least:
 
-Confirm that:
+- training and test subjects and sessions;
+- whether the test data influenced configuration selection;
+- channel set and normalization mode;
+- label mapping;
+- balancing settings and seed;
+- confidence, IDLE, overlap, and smoothing settings;
+- number of evaluated windows and class supports;
+- accuracy, balanced accuracy, per-class recall, and IDLE false-positive rate;
+- the source commit and generated result files.
 
-- The dataset list points to the intended events file.
-- The file contains a `trial_type` column.
-- Labels are `x5` and `x8`, or are normalized by the parser.
-- The events path does not point to an HTML page, screenshot, or unrelated session.
+Do not describe cross-session results as cross-subject results unless the held-out subject was excluded from all training and model-selection steps.
 
-## Unicode or `cp1252` errors on Windows
+## Dataset acknowledgement
 
-Start the UI with UTF-8 enabled:
+This project was developed using the following OpenNeuro dataset:
 
-```powershell
-py -X utf8 bci_web_ui.py
-```
+Sarkar, S., Nathan, K., & Contreras-Vidal, J. L. (2026). *EEG-Controlled Exoskeleton for Walking and Standing: A Longitudinal Study of Healthy Individuals* (Version 1.0.1) [Data set]. OpenNeuro. <https://doi.org/10.18112/openneuro.ds007788.v1.0.1>
 
-Stop the old server with `Ctrl+C` before restarting it.
+Users are responsible for reviewing and complying with the dataset's current terms, documentation, and citation requirements.
 
-## A row is skipped during multi-session training
+## Development history
 
-Read the `[!] SKIPPED` or equivalent terminal line. Common reasons:
+Earlier prototypes explored real-time LSL and joystick-control components. Those prototypes are historical and are not part of the current offline v2.8 workflow. See `CHANGELOG.md` and the Git history for development context.
 
-- EDF file not found
-- Events file not found
-- Events parsing failed
-- No usable x5/x8 events
-- Missing channel
-- Sampling-rate mismatch
+## License
 
----
-
-# Evaluation terminology
-
-Use precise wording when reporting results:
-
-- **Seen-session validation:** the evaluation recording was represented during model development or training.
-- **Cross-session validation:** training and test recordings come from different sessions.
-- **Cross-subject validation:** the test subject was completely excluded from training.
-- **Target-session calibrated performance:** the target session was used to select preprocessing or model settings.
-
-Selecting the best channel set or normalization by repeatedly testing on the same target session makes that session part of configuration selection. A separate untouched session is required for an unbiased final test.
-
----
-
-# Scientific interpretation
-
-The model predicts command periods from EEG recordings under conditions represented in the training data.
-
-Performance may depend on:
-
-- Session-to-session amplitude changes
-- Electrode placement
-- Subject identity
-- Movement and EOG artifacts
-- Selected channels
-- Channel normalization
-- Class balance
-- Window length and step size
-- Confidence and IDLE thresholds
-- Temporal smoothing
-
-The results should not be interpreted as proof of artifact-free, purely brain-internal movement-intention decoding without additional controls.
-
----
-
-# Historical versions
-
-Earlier experiments included:
-
-- `production_grade_bci.py`
-- `realtime_eeg_motor_control.py`
-- `joystick_output.py`
-
-Those versions explored real-time, multi-threaded LSL/vJoy control. Development later shifted toward offline validation and symbolic command generation. See `CHANGELOG.md` and Git history for the complete research process.
-
----
-
-# License and citation
-
-Apache 2.0
+Apache-2.0 
