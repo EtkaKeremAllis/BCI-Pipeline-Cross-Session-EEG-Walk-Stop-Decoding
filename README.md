@@ -313,4 +313,4 @@ Earlier prototypes explored real-time LSL and joystick-control components. Those
 
 ## License
 
-Apache-2.0 
+This project is licensed under the GNU General Public License v3.0. See [LICENSE.txt](LICENSE.txt) for the full license text.
