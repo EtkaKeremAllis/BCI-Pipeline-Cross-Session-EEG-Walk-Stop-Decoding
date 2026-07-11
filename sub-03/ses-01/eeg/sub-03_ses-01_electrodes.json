@@ -1,0 +1,135 @@
+{
+  "Description": "Electrode location details in the cap coordinate system, including channel impedances measured before and after the recording session.",
+  "Columns": [
+    "name",
+    "x",
+    "y",
+    "z",
+    "sph_radius",
+    "sph_theta",
+    "sph_phi",
+    "theta",
+    "radius",
+    "preimpedance",
+    "postimpedance"
+  ],
+  "name": {
+    "Description": "Electrode (EEG, EOG, Ref, Gnd) labels. EEG labels are according to the cap montage."
+  },
+  "EEGInfo": {
+    "Description": "EEG electrodes placed according to the international 10–20 system.",
+    "labels": [
+      "Fp1",
+      "Fp2",
+      "F7",
+      "F3",
+      "Fz",
+      "F4",
+      "F8",
+      "FC5",
+      "FC1",
+      "FC2",
+      "FC6",
+      "T7",
+      "C3",
+      "Cz",
+      "C4",
+      "T8",
+      "CP5",
+      "CP1",
+      "CP2",
+      "CP6",
+      "P7",
+      "P3",
+      "Pz",
+      "P4",
+      "P8",
+      "O1",
+      "Oz",
+      "O2",
+      "AF7",
+      "AF3",
+      "AF4",
+      "AF8",
+      "F5",
+      "F1",
+      "F2",
+      "F6",
+      "AFz",
+      "FT7",
+      "FC3",
+      "FC4",
+      "FT8",
+      "FCz",
+      "C5",
+      "C1",
+      "C2",
+      "C6",
+      "TP7",
+      "CP3",
+      "CPz",
+      "CP4",
+      "TP8",
+      "P5",
+      "P1",
+      "P2",
+      "P6",
+      "PO7",
+      "PO3",
+      "POz",
+      "PO4",
+      "PO8"
+    ]
+  },
+  "EOGInfo": {
+    "Description": "EOG electrode placement: EOG_HR: right side of the right eye; EOG_HL: left side of the left eye; EOG_VA: above the right eye; EOG_VB: below the right eye.",
+    "labels": [
+      "EOG_HL",
+      "EOG_HR",
+      "EOG_VA",
+      "EOG_VB"
+    ],
+    "Notes": "No location coordinate details are provided for EOG electrodes."
+  },
+  "RefGndInfo": {
+    "Description": "Reference electrode (Ref) was placed on the right earlobe, and ground electrode (Gnd) was placed on the left earlobe.",
+    "labels": [
+      "Ref",
+      "Gnd"
+    ],
+    "Notes": "No location coordinate details are provided for Ref and Gnd electrodes."
+  },
+  "x": {
+    "Description": "Cartesian X coordinate (to nose) for the electrode."
+  },
+  "y": {
+    "Description": "Cartesian Y coordinate (to left ear) for the electrode."
+  },
+  "z": {
+    "Description": "Cartesian Z coordinate (to vertex) for the electrode."
+  },
+  "sph_radius": {
+    "Description": "Real distance from head center for the electrode."
+  },
+  "sph_theta": {
+    "Description": "Spherical elevation angle (real degrees) for the electrode. Positive = Rotating from nose (0) toward left ear."
+  },
+  "sph_phi": {
+    "Description": "Real distance from head center for the electrode. Positive = Rotating from horizontal (0) upwards."
+  },
+  "theta": {
+    "Description": "Theta angle (polar coordinate, in degrees). Positive values rotate from the nose (0°) toward the left ear."
+  },
+  "radius": {
+    "Description": "Radius in polar coordinates (real, unitless). 0.5 corresponds to the head disk radius and is used as the plotting limit in topoplot()."
+  },
+  "preimpedance": {
+    "Description": "EEG electrode impedance measured before the start of the recording session.",
+    "Units": "kOhm"
+  },
+  "postimpedance": {
+    "Description": "EEG electrode impedance measured after the end of the recording session.",
+    "Units": "kOhm"
+  },
+  "RecordingDate": "2015-08-14"
+}

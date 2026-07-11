@@ -1,0 +1,8 @@
+{
+  "IntendedFor": "sub-03_ses-01_electrodes.tsv",
+  "EEGCoordinateUnits": "n/a",
+  "EEGCoordinateSystem": "CapTrak",
+  "FiducialsCoordinateSystem": "CapTrak",
+  "FiducialsDescription": "Fiducial landmarks (nasion, left preauricular point, right preauricular point) were recorded using the CapTrak 3D digitization system to define the head coordinate reference frame.",
+  "FiducialsCoordinateSystemDescription": "{\n  \"LPA\": \"Left Preauricular Point (junction between tragus and helix of left ear)\",\n  \"RPA\": \"Right Preauricular Point (junction between tragus and helix of right ear)\",\n  \"Nz\": \"Nasion (intersection of frontal bone and nasal bones, above the bridge of the nose)\"\n}"
+}
