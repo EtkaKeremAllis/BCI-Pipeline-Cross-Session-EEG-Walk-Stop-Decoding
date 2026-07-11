@@ -7,8 +7,10 @@ Critical design-error fix from the brief:
   Training data (labeled event windows) != Prediction data (sliding windows
   over the entire continuous recording) -> distribution mismatch -> collapse.
 
-This file separates three modes:
+This file separates four modes:
   train             : train and save a model from labeled event windows
+  train_multi       : train and save a pooled model from multiple labeled recordings.
+
   validate_timeline : test a trained model with sliding windows on a FULLY
                       labeled session and compare it with the ground-truth timeline
   predict           : run inference on unlabeled raw EEG (no event file required)
