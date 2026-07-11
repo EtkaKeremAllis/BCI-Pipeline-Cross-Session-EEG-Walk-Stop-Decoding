@@ -1,6 +1,14 @@
 """
 Minimal EDF (European Data Format) reader - no external dependencies.
 Follows the standard EDF specification: https://www.edfplus.info/specs/edf.html
+
+Scope: only plain EDF (16-bit samples, no annotation channel) is supported.
+BDF (BioSemi, 24-bit samples) and EDF+ (adds an "EDF Annotations"
+pseudo-channel that is not a numeric signal) are explicitly rejected rather
+than silently mis-parsed - this reader has only been verified against plain
+EDF files (OpenNeuro ds007788), and misreading BDF's 24-bit samples as EDF's
+16-bit ones, or an EDF+ annotations channel as a regular numeric channel,
+would produce corrupted signal data without any error.
 """
 import numpy as np
 
@@ -8,6 +16,13 @@ import numpy as np
 def read_edf(filepath):
     with open(filepath, 'rb') as f:
         header = f.read(256)
+
+        if header[0:1] == b'\xff' and header[1:8] == b'BIOSEMI':
+            raise ValueError(
+                f"{filepath}: this is a BDF (BioSemi) file, not EDF. BDF uses "
+                "24-bit samples; this reader only supports plain EDF's 16-bit "
+                "samples and would misread BDF data as corrupted noise."
+            )
 
         version = header[0:8].decode('ascii', errors='replace').strip()
         patient_id = header[8:88].decode('ascii', errors='replace').strip()
@@ -20,12 +35,28 @@ def read_edf(filepath):
         record_duration = float(header[244:252].decode('ascii').strip())
         n_signals = int(header[252:256].decode('ascii').strip())
 
+        if reserved.startswith('EDF+'):
+            raise ValueError(
+                f"{filepath}: this is an EDF+ file (reserved field={reserved!r}). "
+                "EDF+ adds an 'EDF Annotations' pseudo-channel holding variable-"
+                "length text, not a numeric signal; this reader would misread it "
+                "as regular sample data. Only plain EDF is currently supported."
+            )
+
         # Per-signal header fields
         def read_field(n_bytes):
             return [f.read(n_bytes).decode('ascii', errors='replace').strip()
                     for _ in range(n_signals)]
 
         labels = read_field(16)
+
+        if 'EDF Annotations' in labels:
+            raise ValueError(
+                f"{filepath}: found an 'EDF Annotations' channel even though "
+                "the reserved header field did not mark this as EDF+. This "
+                "reader cannot parse annotation channels as numeric signals - "
+                "refusing to continue rather than silently corrupt the data."
+            )
         transducer = read_field(80)
         phys_dim = read_field(8)
         phys_min = [float(x) for x in read_field(8)]
