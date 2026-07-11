@@ -771,4 +771,4 @@ Those versions explored real-time, multi-threaded LSL/vJoy control. Development 
 
 # License and citation
 
-APACHI 2.0
+Apache 2.0
