@@ -36,7 +36,48 @@ from modern_bci_v2 import BCIConfig, ModernBCIPipeline, logger
 
 EPS = 1e-8
 LABEL_NAMES = {0: 'STOP', 1: 'WALK', 2: 'IDLE', -1: 'IGNORE'}
-COMMAND_LABEL_MAP = {'x5': 0, 'x8': 1}  # x5=STOP=0, x8=WALK=1. x99/others -> ignore
+# Default trial_type -> label mapping (0=STOP, 1=WALK), used when --label-map
+# is not given. Matches the "REX system" event scheme (x5=STOP, x8=WALK)
+# used by the datasets this pipeline was originally built against.
+DEFAULT_LABEL_MAP = {'x5': 0, 'x8': 1}
+
+
+def resolve_label_map(label_map_arg):
+    """
+    Resolve the --label-map CLI value into a dict[str, int] mapping each
+    events-file trial_type to 0 (STOP) or 1 (WALK).
+
+    label_map_arg: None (-> DEFAULT_LABEL_MAP), a JSON object string
+    (e.g. '{"x5":0,"x8":1}'), or a path to a JSON file with the same shape.
+    Different datasets use different trial_type vocabularies, so this must
+    stay configurable rather than hardcoded.
+    """
+    if not label_map_arg:
+        return dict(DEFAULT_LABEL_MAP)
+
+    if os.path.exists(label_map_arg):
+        with open(label_map_arg) as f:
+            raw = json.load(f)
+    else:
+        try:
+            raw = json.loads(label_map_arg)
+        except json.JSONDecodeError as e:
+            raise SystemExit(
+                f"--label-map must be a JSON object (e.g. '{{\"x5\":0,\"x8\":1}}') "
+                f"or a path to a JSON file containing one. Got: {label_map_arg!r} ({e})"
+            )
+
+    if not isinstance(raw, dict) or not raw:
+        raise SystemExit(f"--label-map must be a non-empty JSON object, got: {raw!r}")
+
+    label_map = {}
+    for trial_type, label in raw.items():
+        if label not in (0, 1):
+            raise SystemExit(
+                f"--label-map values must be 0 (STOP) or 1 (WALK); got {trial_type!r}: {label!r}"
+            )
+        label_map[str(trial_type)] = int(label)
+    return label_map
 
 
 # ============================================================================
@@ -189,14 +230,18 @@ def build_sliding_windows(signal_len, fs, window_len=3.0, step_len=0.25):
     return windows
 
 
-def label_windows_from_events(windows, events, overlap_threshold=0.5):
+def label_windows_from_events(windows, events, overlap_threshold=0.5, label_map=None):
     """
     Labels the ground-truth timeline (used ONLY by validate_timeline).
     events: list of (onset, duration, trial_type) tuples.
+    label_map: dict[str, int] mapping trial_type -> 0 (STOP) or 1 (WALK);
+    defaults to DEFAULT_LABEL_MAP.
     Returned label: 0=STOP, 1=WALK, 2=IDLE (ambiguous/no overlap)
     """
-    x5_intervals = [(o, o + d) for o, d, t in events if t == 'x5']
-    x8_intervals = [(o, o + d) for o, d, t in events if t == 'x8']
+    if label_map is None:
+        label_map = DEFAULT_LABEL_MAP
+    stop_intervals = [(o, o + d) for o, d, t in events if label_map.get(t) == 0]
+    walk_intervals = [(o, o + d) for o, d, t in events if label_map.get(t) == 1]
 
     def overlap_duration(win_start, win_end, intervals):
         total = 0.0
@@ -207,29 +252,33 @@ def label_windows_from_events(windows, events, overlap_threshold=0.5):
     labels = []
     for w in windows:
         dur = w['end_time'] - w['start_time']
-        ov5 = overlap_duration(w['start_time'], w['end_time'], x5_intervals)
-        ov8 = overlap_duration(w['start_time'], w['end_time'], x8_intervals)
-        frac5, frac8 = ov5 / dur, ov8 / dur
-        if frac8 >= overlap_threshold and frac8 >= frac5:
+        stop_ov = overlap_duration(w['start_time'], w['end_time'], stop_intervals)
+        walk_ov = overlap_duration(w['start_time'], w['end_time'], walk_intervals)
+        stop_frac, walk_frac = stop_ov / dur, walk_ov / dur
+        if walk_frac >= overlap_threshold and walk_frac >= stop_frac:
             labels.append(1)
-        elif frac5 >= overlap_threshold and frac5 > frac8:
+        elif stop_frac >= overlap_threshold and stop_frac > walk_frac:
             labels.append(0)
         else:
             labels.append(2)  # IDLE (ambiguous/outside events)
     return np.array(labels)
 
 
-def extract_command_training_windows(events, fs, skip_start=1.0, skip_end=1.0, window_len=3.0):
+def extract_command_training_windows(events, fs, skip_start=1.0, skip_end=1.0, window_len=3.0,
+                                     label_map=None):
     """
-    Event-ANCHORED, non-overlapping windows for training (x5/x8 ONLY).
+    Event-ANCHORED, non-overlapping windows for training (STOP/WALK events ONLY,
+    as defined by label_map).
     This is intentionally DIFFERENT from deployment sliding windows: training
     data always comes from labeled command intervals.
     """
+    if label_map is None:
+        label_map = DEFAULT_LABEL_MAP
     windows = []
     for onset, duration, trial_type in events:
-        if trial_type not in COMMAND_LABEL_MAP:
+        if trial_type not in label_map:
             continue
-        label = COMMAND_LABEL_MAP[trial_type]
+        label = label_map[trial_type]
         usable_start = onset + skip_start
         usable_end = onset + duration - skip_end
         usable_duration = usable_end - usable_start
@@ -259,10 +308,13 @@ class DeployableBCIModel:
                  use_csp=True, lda_shrinkage=0.0, n_features_select=45,
                  window_len=3.0, step_len=0.25,
                  confidence_threshold=0.45, idle_distance_threshold=999.0,
-                 channel_set=None, channel_normalization='zscore'):
+                 channel_set=None, channel_normalization='zscore', label_map=None):
         self.channels = list(channels)
         self.channel_set = channel_set  # informational only; selection was already handled by resolve_channels()
         self.channel_normalization = channel_normalization
+        # trial_type -> 0 (STOP) / 1 (WALK) mapping used to train this model;
+        # persisted so validate_timeline/predict reuse the same scheme automatically.
+        self.label_map = dict(label_map) if label_map else dict(DEFAULT_LABEL_MAP)
         self.sampling_rate = sampling_rate
         self.window_len = window_len
         self.step_len = step_len
@@ -429,7 +481,7 @@ class DeployableBCIModel:
             'confidence_threshold': self.confidence_threshold,
             'idle_distance_threshold': self.idle_distance_threshold,
             'label_map': {'STOP': 0, 'WALK': 1, 'IDLE': 2},
-            'command_label_map_source': COMMAND_LABEL_MAP,
+            'command_label_map_source': self.label_map,
         }
         with open(os.path.join(output_dir, 'model_info.json'), 'w') as f:
             json.dump(info, f, indent=2)
@@ -462,6 +514,9 @@ class DeployableBCIModel:
             # records which preset it came from.
             channel_set=info.get('channel_set'),
             channel_normalization=info.get('channel_normalization', 'none'),
+            # Backward compatible: older models were always trained with the
+            # REX-system x5/x8 scheme (DEFAULT_LABEL_MAP), so fall back to it.
+            label_map=info.get('command_label_map_source'),
         )
 
         # Restore fitted state (CSP, feature_selector, classifier)
@@ -720,26 +775,31 @@ def _json_default(o):
 def run_train(edf_path, events_path, output_dir, channel_set='motor3',
               window_len=3.0, step_len=0.25, idle_distance_threshold=999.0,
               confidence_threshold=0.45, n_features_select=45, lda_shrinkage=0.0,
-              balance_classes='none', seed=42, channel_normalization='zscore'):
+              balance_classes='none', seed=42, channel_normalization='zscore',
+              label_map=None):
     print("=" * 70)
     print("MODE: train")
     print("=" * 70)
+
+    if label_map is None:
+        label_map = DEFAULT_LABEL_MAP
 
     signals, info = read_edf(edf_path)
 
     channels = resolve_channels(signals, channel_set)
     print(f"[*] Channel set {channel_set}: {len(channels)} channels -> {channels}")
     print(f"[*] Channel normalization: {channel_normalization}")
+    print(f"[*] Label map: {label_map}")
 
     events_all = parse_events(events_path)
-    events = [(o, d, t) for o, d, t in events_all if t in COMMAND_LABEL_MAP]
-    dropped = [(o, d, t) for o, d, t in events_all if t not in COMMAND_LABEL_MAP]
+    events = [(o, d, t) for o, d, t in events_all if t in label_map]
+    dropped = [(o, d, t) for o, d, t in events_all if t not in label_map]
     if dropped:
-        print(f"[*] Skipped {len(dropped)} events outside x5/x8 (e.g. {dropped[:3]})")
+        print(f"[*] Skipped {len(dropped)} events outside the label map (e.g. {dropped[:3]})")
 
     fs = info['sampling_rate'][channels[0]]
     print(f"[*] EDF: {len(signals[channels[0]])} samples @ {fs:.0f}Hz")
-    print(f"[*] Events: {len(events)} usable (x5/x8)")
+    print(f"[*] Events: {len(events)} usable")
 
     model = DeployableBCIModel(
         channels=channels, sampling_rate=fs, window_len=window_len, step_len=step_len,
@@ -748,10 +808,12 @@ def run_train(edf_path, events_path, output_dir, channel_set='motor3',
         n_features_select=n_features_select, lda_shrinkage=lda_shrinkage,
         channel_set=channel_set,
         channel_normalization=channel_normalization,
+        label_map=label_map,
     )
 
     preprocessed = model.preprocess_continuous(signals)
-    train_windows = extract_command_training_windows(events, fs, window_len=window_len)
+    train_windows = extract_command_training_windows(events, fs, window_len=window_len,
+                                                       label_map=label_map)
     print(f"[*] Extracted {len(train_windows)} training windows "
           f"(event-anchored, non-overlapping, {window_len}s)")
 
@@ -777,6 +839,7 @@ def run_train(edf_path, events_path, output_dir, channel_set='motor3',
         f.write(f"Events: {events_path}\n")
         f.write(f"Channel set: {channel_set}\n")
         f.write(f"Channel normalization: {channel_normalization}\n")
+        f.write(f"Label map: {label_map}\n")
         f.write(f"Channels: {channels}\n")
         f.write(f"Sampling rate: {fs}\n")
         f.write(f"Train windows: {len(train_windows)} (STOP={stats['n_stop']}, WALK={stats['n_walk']})\n")
@@ -816,7 +879,7 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
                      idle_distance_threshold=999.0, confidence_threshold=0.45,
                      n_features_select=45, lda_shrinkage=0.0,
                      balance_classes='none', balance_subjects='none', seed=42,
-                     channel_normalization='zscore'):
+                     channel_normalization='zscore', label_map=None):
     """
     Preprocess multiple (subject, session) recordings SEPARATELY and train ONE
     DeployableBCIModel by pooling ONLY labeled command windows.
@@ -828,6 +891,9 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
       - train_manifest_used.csv: windows actually used for training.
     """
     import csv as csv_mod
+
+    if label_map is None:
+        label_map = DEFAULT_LABEL_MAP
 
     print("=" * 70)
     print("MODE: train_multi")
@@ -898,9 +964,9 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
             print(f"[!] SKIPPED [{tag}]: events could not be read ({e})")
             skipped_files.append((tag, f'events_parse_error:{e}', events_path))
             continue
-        events = [(o, d, t) for o, d, t in events_all if t in COMMAND_LABEL_MAP]
+        events = [(o, d, t) for o, d, t in events_all if t in label_map]
         if not events:
-            print(f"[!] SKIPPED [{tag}]: no usable x5/x8 events")
+            print(f"[!] SKIPPED [{tag}]: no usable events for the configured label map")
             skipped_files.append((tag, 'no_usable_events', events_path))
             continue
 
@@ -911,10 +977,12 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
             n_features_select=n_features_select, lda_shrinkage=lda_shrinkage,
             channel_set=channel_set,
             channel_normalization=channel_normalization,
+            label_map=label_map,
         )
         preprocessed = temp_model.preprocess_continuous(signals)
 
-        file_windows = extract_command_training_windows(events, fs, window_len=window_len)
+        file_windows = extract_command_training_windows(events, fs, window_len=window_len,
+                                                          label_map=label_map)
         n_stop_file = sum(1 for w in file_windows if w['label'] == 0)
         n_walk_file = sum(1 for w in file_windows if w['label'] == 1)
         print(f"[+] [{tag}] {len(file_windows)} windows (STOP={n_stop_file}, WALK={n_walk_file})")
@@ -1032,6 +1100,7 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
         n_features_select=n_features_select, lda_shrinkage=lda_shrinkage,
         channel_set=channel_set,
         channel_normalization=channel_normalization,
+        label_map=label_map,
     )
     stats = model.train_from_trials(raw_trials, y_pooled)
     print(f"\n[+] Pooled training completed: STOP={stats['n_stop']}, WALK={stats['n_walk']}")
@@ -1058,6 +1127,7 @@ def run_train_multi(dataset_list_csv, output_dir, dataset_dir='.',
         f.write(f"Candidate class imbalance ratio: {imbalance_ratio_candidate:.2f}:1\n")
         f.write(f"Channel set: {channel_set}\n")
         f.write(f"Channel normalization: {channel_normalization}\n")
+        f.write(f"Label map: {label_map}\n")
         f.write(f"Channels: {channels}\n")
         f.write(f"Sampling rate: {fs_reference}\n")
         f.write(f"CSP: {info_saved['use_csp']}, n_features_select: {info_saved['n_features_select']}, "
@@ -1374,6 +1444,7 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
 
     model = DeployableBCIModel.load(model_dir)
     print(f"[*] Channel normalization: {model.channel_normalization} (loaded from model)")
+    print(f"[*] Label map: {model.label_map} (loaded from model)")
     rows_pred, meta = _predict_full_record(edf_path, model)
     events_all = parse_events(events_path)
 
@@ -1387,7 +1458,7 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
     print(f"[*] Temporal smoothing window: {smoothing_window} "
           f"({'no smoothing' if smoothing_window == 1 else 'centered majority vote'})")
 
-    gt_labels = label_windows_from_events(windows, events_all, overlap_threshold)
+    gt_labels = label_windows_from_events(windows, events_all, overlap_threshold, label_map=model.label_map)
     raw_labels_int = [int(r['predicted']) for r in rows_pred]
     smoothed_prediction = apply_temporal_smoothing(raw_labels_int, smoothing_window)
 
@@ -1552,6 +1623,11 @@ def main():
                         default='motor3',
                         help='(train/train_multi only) EEG channel set to use. '
                              'validate_timeline/predict always use the channels saved in the model.')
+    parser.add_argument('--label-map', default=None,
+                        help='(train/train_multi only) trial_type -> 0 (STOP) / 1 (WALK) mapping, as a '
+                             'JSON object string (e.g. \'{"x5":0,"x8":1}\') or a path to a JSON file. '
+                             f'Defaults to the REX-system scheme {DEFAULT_LABEL_MAP}. '
+                             'validate_timeline/predict always reuse the label map saved in the model.')
     args = parser.parse_args()
 
     logger.setLevel(logging.WARNING)
@@ -1566,7 +1642,8 @@ def main():
                    n_features_select=args.n_features_select,
                    lda_shrinkage=args.lda_shrinkage,
                    balance_classes=args.balance_classes, seed=args.seed,
-                   channel_normalization=args.channel_normalization)
+                   channel_normalization=args.channel_normalization,
+                   label_map=resolve_label_map(args.label_map))
 
     elif args.mode == 'train_multi':
         if not args.dataset_list:
@@ -1579,7 +1656,8 @@ def main():
                          lda_shrinkage=args.lda_shrinkage,
                          balance_classes=args.balance_classes,
                          balance_subjects=args.balance_subjects, seed=args.seed,
-                         channel_normalization=args.channel_normalization)
+                         channel_normalization=args.channel_normalization,
+                         label_map=resolve_label_map(args.label_map))
 
     elif args.mode == 'validate_timeline':
         if not args.edf or not args.model:
