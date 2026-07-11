@@ -40,10 +40,3 @@ EEG and producing a symbolic joystick command (WALK/STOP/IDLE).
 
 ---
 
-### Note: Skipped/merged duplicates
-A significant portion of the uploaded files were exact duplicates (identical
-content, different file name) and were not included in this history:
-`bci_pipeline_v3_1_.py` (= v3.0), `bci_pipeline_2_.py` (= v2.0),
-`bci_pipeline_v3_5__1_/_2_/v3_6_.py` (= v3.4), `bci_pipeline_v2_6_1_.py` (= v3.5),
-3 additional copies of `validate_full`, `parse_events_1_.py`, `edf_reader_1_.py`,
-`modern_bci_v2_3_.py` (= v0.3), `modern_bci_vclaude3.py` (very close to v0.2, ~37-line difference).
