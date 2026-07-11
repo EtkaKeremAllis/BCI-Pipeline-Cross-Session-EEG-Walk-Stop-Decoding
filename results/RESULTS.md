@@ -1,7 +1,22 @@
 # EEG Walk/Stop BCI — Experimental Results
 
-> **Current evidence level:** exploratory cross-session development benchmark.  
+> **Current evidence level:** exploratory same-subject cross-session development benchmark.  
 > **Cross-subject performance:** not yet claimed; the frozen evaluation runner is included in this repository.
+
+## Reproducibility metadata
+
+- **Code commit used for the reported benchmark:** `<FULL_COMMIT_SHA>`
+- **Operating system:** Windows 11 Pro
+- **Python:** 3.13.14
+- **Python executable:** `C:\Users\kerem\AppData\Local\Programs\Python\Python313\python.exe`
+- **NumPy:** 2.5.0
+- **SciPy:** 1.18.0
+- **MNE:** not installed
+- **scikit-learn:** not installed
+
+The reported benchmark was executed with the Python interpreter shown above. MNE and scikit-learn were not installed and were not required by the pipeline.
+
+> Replace `<FULL_COMMIT_SHA>` with the output of `git rev-parse HEAD` from the exact repository state used to generate the committed result files.
 
 ## Headline result
 
@@ -9,12 +24,14 @@ The current best low-cost configuration uses only **three motor-area electrodes 
 
 | Metric | Result |
 |---|---:|
-| Mean deployment accuracy | **79.39%** |
+| Mean window-level accuracy | **79.39%** |
 | Mean balanced accuracy | **77.95%** |
 | Worst-direction balanced accuracy | **77.03%** |
 | Mean WALK recall | **72.27%** |
 | Mean STOP recall | **83.63%** |
 | Collapse events | **0 / 2** |
+
+The two held-out recordings produced approximately **980 overlapping evaluation windows per direction**. These windows are **not statistically independent samples**: adjacent windows share EEG data and are temporally correlated because a 3.0 s window was advanced in 0.25 s steps. The reported metrics therefore describe window-level decoding performance on the held-out recordings, not performance across 980 independent trials. No confidence interval or significance test assuming independent windows is reported.
 
 ## Frozen configuration
 
@@ -38,6 +55,17 @@ The current best low-cost configuration uses only **three motor-area electrodes 
 | `sub-02/ses-01` | `sub-02/ses-02` | 75.92% | **77.03%** | 81.42% | 72.64% | No |
 | `sub-02/ses-02` | `sub-02/ses-01` | 82.86% | **78.87%** | 63.11% | 94.63% | No |
 | **Mean** | — | **79.39%** | **77.95%** | **72.27%** | **83.63%** | **0 / 2** |
+
+### Evaluation scope
+
+This frozen benchmark evaluates only labelled **WALK** and **STOP** command intervals. `IDLE`/background periods were excluded from the reported accuracy, balanced accuracy, and class-recall calculations. The `IDLE` distance threshold was effectively disabled by setting it to `999`.
+
+Consequently, these results do **not** measure:
+
+- IDLE rejection performance;
+- false activations during unlabelled or background periods;
+- three-class WALK/STOP/IDLE performance;
+- end-to-end continuous-control safety or reliability.
 
 ## Channel-cost comparison
 
@@ -159,8 +187,7 @@ The validation command writes the original pipeline output names, including `tim
 
 ### Optional broader benchmark
 
-
-### 1. Download the required dataset subset
+#### 1. Download the required dataset subset
 
 On Windows PowerShell:
 
@@ -170,7 +197,7 @@ On Windows PowerShell:
 
 This downloads only the `task-training` EDF files and their `rexcommand` event TSV files, not the full dataset.
 
-### 2. Run the frozen benchmark
+#### 2. Run the frozen benchmark
 
 ```powershell
 .\scripts\run_benchmark.ps1
@@ -198,9 +225,11 @@ The runner writes:
 ## Interpretation and limitations
 
 - The 77.95% figure is an **exploratory development estimate** because feature count, shrinkage, smoothing, and normalization were selected using the same two sessions.
+- The approximately 980 overlapping windows per direction are temporally correlated and must not be interpreted as independent observations.
 - Same-subject cross-session validation does not establish cross-person generalization.
 - High performance can reflect neural activity, but also movement, ocular, muscle, cable, feedback, or session-correlated artifacts.
-- `IDLE` gating was effectively disabled (`999`) in the headline benchmark; the reported task is primarily STOP-versus-WALK command-period classification.
+- `IDLE` was not evaluated in the headline benchmark. Background periods were excluded, and the `IDLE` gate was effectively disabled with a threshold of `999`.
+- The reported numbers do not characterize false activations during background periods or full continuous-control performance.
 - The model should not be described as a proven decoder of pure brain-internal walking intention.
 
 ## Data and machine-readable files
