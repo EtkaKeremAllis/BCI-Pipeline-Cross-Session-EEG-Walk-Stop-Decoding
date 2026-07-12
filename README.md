@@ -2,7 +2,7 @@
 
 An offline EEG-based brain-computer interface (BCI) pipeline for classifying **WALK** and **STOP** command periods and producing symbolic **WALK / STOP / IDLE** outputs.
 
-The current implementation is `bci_pipeline_v2.8.py`. It supports single-session and pooled multi-session training, full-record timeline validation, and prediction on unlabeled EDF recordings. A dependency-free local Web UI is also included.
+The current implementation is `bci_pipeline_v2.9.py`. It supports single-session and pooled multi-session training, full-record timeline validation, and prediction on unlabeled EDF recordings. A dependency-free local Web UI is also included.
 
 > [!IMPORTANT]
 > This repository implements an offline research pipeline. It does not provide real-time EEG streaming, HID control, or vJoy output. Predictions are generated from fixed EEG recordings and saved to files.
@@ -43,7 +43,7 @@ Continuous recordings are processed independently. In multi-session training, re
 
 | File | Purpose |
 |---|---|
-| `bci_pipeline_v2.8.py` | Main command-line pipeline |
+| `bci_pipeline_v2.9.py` | Main command-line pipeline |
 | `bci_web_ui.py` | Local browser interface for the pipeline |
 | `modern_bci_v2.py` | CSP, feature extraction, feature selection, and LDA components |
 | `edf_reader.py` | EDF loading utilities |
@@ -103,7 +103,7 @@ prediction ever fall out of distribution sync again, this test's
 `collapse_warning` assertions will fail.
 
 **Run the full test suite (`pytest tests/ -v`) after any change to
-`bci_pipeline_v2.8.py`, `modern_bci_v2.py`, `edf_reader.py`, or
+`bci_pipeline_v2.9.py`, `modern_bci_v2.py`, `edf_reader.py`, or
 `parse_events.py`** - it catches structural regressions well before you'd
 notice them in a real multi-minute training run on real data.
 
@@ -112,7 +112,7 @@ notice them in a real multi-minute training run on real data.
 Show the complete interface:
 
 ```bash
-python bci_pipeline_v2.8.py --help
+python bci_pipeline_v2.9.py --help
 ```
 
 The available modes are:
@@ -144,7 +144,7 @@ The selected mapping is saved with the model and reused during validation and pr
 ## Single-session training
 
 ```powershell
-python bci_pipeline_v2.8.py `
+python bci_pipeline_v2.9.py `
   --mode train `
   --edf "D:\BCI\data\session01_eeg.edf" `
   --events "D:\BCI\data\session01_events.tsv" `
@@ -179,7 +179,7 @@ sub-02,ses-01,data/sub-02_ses-01_eeg.edf,data/sub-02_ses-01_events.tsv
 Relative paths are resolved against `--dataset-dir`:
 
 ```powershell
-python bci_pipeline_v2.8.py `
+python bci_pipeline_v2.9.py `
   --mode train_multi `
   --dataset-list "D:\BCI\train_list.csv" `
   --dataset-dir "D:\BCI" `
@@ -206,7 +206,7 @@ Supported balancing settings:
 Supply an events file to calculate timeline metrics:
 
 ```powershell
-python bci_pipeline_v2.8.py `
+python bci_pipeline_v2.9.py `
   --mode validate_timeline `
   --edf "D:\BCI\data\session02_eeg.edf" `
   --events "D:\BCI\data\session02_events.tsv" `
@@ -223,7 +223,7 @@ Validation and prediction always reuse the channel list, normalization mode, sam
 ## Unlabeled prediction
 
 ```powershell
-python bci_pipeline_v2.8.py `
+python bci_pipeline_v2.9.py `
   --mode predict `
   --edf "D:\BCI\data\unlabeled_eeg.edf" `
   --model "D:\BCI\results\pooled_model" `
@@ -305,7 +305,7 @@ python bci_web_ui.py
 
 Then open <http://127.0.0.1:8765>.
 
-The UI runs `bci_pipeline_v2.8.py` as a local child process. EEG data is processed locally and is not uploaded by the interface. Stop the server with `Ctrl+C`.
+The UI runs `bci_pipeline_v2.9.py` as a local child process. EEG data is processed locally and is not uploaded by the interface. Stop the server with `Ctrl+C`.
 
 ## Reporting results
 
@@ -333,7 +333,7 @@ Users are responsible for reviewing and complying with the dataset's current ter
 
 ## Development history
 
-Earlier prototypes explored real-time LSL and joystick-control components. Those prototypes are historical and are not part of the current offline v2.8 workflow. See `CHANGELOG.md` and the Git history for development context.
+Earlier prototypes explored real-time LSL and joystick-control components. Those prototypes are historical and are not part of the current offline v2.9 workflow. See `CHANGELOG.md` and the Git history for development context.
 
 ## License
 
