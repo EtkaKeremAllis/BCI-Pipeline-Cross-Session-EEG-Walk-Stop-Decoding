@@ -4,6 +4,10 @@ An offline EEG-based brain-computer interface (BCI) pipeline for classifying **W
 
 The current implementation is `bci_pipeline_v2.9.py`. It supports single-session and pooled multi-session training, full-record timeline validation, and prediction on unlabeled EDF recordings. A dependency-free local Web UI is also included.
 
+## Experimental results
+
+See [results.v2.8/RESULTS.md](results.v2.8/RESULTS.md) for the reported reciprocal cross-session benchmark, exact reproduction commands, environment details, machine-readable outputs, and scientific limitations.
+
 > [!IMPORTANT]
 > This repository implements an offline research pipeline. It does not provide real-time EEG streaming, HID control, or vJoy output. Predictions are generated from fixed EEG recordings and saved to files.
 
