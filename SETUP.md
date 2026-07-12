@@ -1,7 +1,7 @@
 # Setup Guide
 
 This guide installs the dependencies required by `bci_web_ui.py` and
-`bci_pipeline_v2.8.py` in an isolated Python virtual environment.
+`bci_pipeline_v2.9.py` in an isolated Python virtual environment.
 
 The Web UI itself uses only the Python standard library. NumPy and SciPy are
 required by the signal-processing pipeline. `pdfplumber` is required only for
@@ -42,7 +42,7 @@ The directory should contain at least:
 
 ```text
 bci_web_ui.py
-bci_pipeline_v2.8.py
+bci_pipeline_v2.9.py
 modern_bci_v2.py
 edf_reader.py
 parse_events.py
@@ -179,14 +179,14 @@ python -m pip install -r requirements.txt
 
 ```powershell
 .\.venv\Scripts\python.exe -c "import numpy, scipy, pdfplumber; print('Dependencies OK')"
-.\.venv\Scripts\python.exe bci_pipeline_v2.8.py --help
+.\.venv\Scripts\python.exe bci_pipeline_v2.9.py --help
 ```
 
 ### Linux/macOS
 
 ```bash
 python -c "import numpy, scipy, pdfplumber; print('Dependencies OK')"
-python bci_pipeline_v2.8.py --help
+python bci_pipeline_v2.9.py --help
 ```
 
 ## 7. Start the Web UI
