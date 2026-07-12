@@ -5,7 +5,7 @@
 
 ## Reproducibility metadata
 
-- **Code commit used for the reported benchmark:** `<FULL_COMMIT_SHA>`
+- **Code commit used for the reported benchmark:** `d90700b6346e1fe2c1fdd37d180eeb4c67a1bcad`
 - **Operating system:** Windows 11 Pro
 - **Python:** 3.13.14
 - **Python executable:** `C:\Users\kerem\AppData\Local\Programs\Python\Python313\python.exe`
@@ -15,8 +15,6 @@
 - **scikit-learn:** not installed
 
 The reported benchmark was executed with the Python interpreter shown above. MNE and scikit-learn were not installed and were not required by the pipeline.
-
-> Replace `<FULL_COMMIT_SHA>` with the output of `git rev-parse HEAD` from the exact repository state used to generate the committed result files.
 
 ## Headline result
 
@@ -184,10 +182,17 @@ The validation command writes the original pipeline output names, including `tim
 
 ## Data and machine-readable files
 
-- [`results/verified_sub02_cross_session.csv`](results/verified_sub02_cross_session.csv)
-- [`results/channel_set_comparison.csv`](results/channel_set_comparison.csv)
-- [`results/optimization_top10.csv`](results/optimization_top10.csv)
-- [`results/verified_results.json`](results/verified_results.json)
+### Session 01 → Session 02
+
+- [`session01_to_session02/metrics.json`](session01_to_session02/metrics.json)
+- [`session01_to_session02/commands.csv`](session01_to_session02/commands.csv)
+- [`session01_to_session02/confusion_matrix.csv`](session01_to_session02/confusion_matrix.csv)
+
+### Session 02 → Session 01
+
+- [`session02_to_session01/metrics.json`](session02_to_session01/metrics.json)
+- [`session02_to_session01/commands.csv`](session02_to_session01/commands.csv)
+- [`session02_to_session01/confusion_matrix.csv`](session02_to_session01/confusion_matrix.csv)
 
 ## Dataset attribution
 

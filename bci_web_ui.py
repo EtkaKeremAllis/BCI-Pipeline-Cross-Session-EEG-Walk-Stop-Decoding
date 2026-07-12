@@ -38,7 +38,7 @@ PORT = 8765
 VALID_MODES = {"train", "train_multi", "validate_timeline", "predict"}
 VALID_CHANNEL_SETS = {"motor3", "motor5", "motor9", "motor13", "all_eeg"}
 VALID_CHANNEL_NORMALIZATION = {"none", "zscore"}
-VALID_BALANCE_CLASSES = {"none", "downsample", "class_weight"}
+VALID_BALANCE_CLASSES = {"none", "downsample"}
 VALID_BALANCE_SUBJECTS = {"none", "downsample"}
 VALID_SMOOTHING_WINDOWS = {"1", "3", "5"}
 
@@ -508,7 +508,6 @@ INDEX_HTML = r"""
             <select id="balance_classes" name="balance_classes">
               <option value="none" selected>none</option>
               <option value="downsample">downsample</option>
-              <option value="class_weight">class_weight</option>
             </select>
           </div>
           <div>

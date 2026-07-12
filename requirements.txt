@@ -1,5 +1,6 @@
 # Runtime dependencies for bci_web_ui.py and bci_pipeline_v2.8.py
-# Supported Python version: 3.9+
+# Expected Python versions: 3.10+
+# Verified environment: Python 3.13.14
 
 # Numerical arrays, model persistence, and signal data processing
 numpy>=1.24,<3.0
@@ -10,3 +11,6 @@ scipy>=1.10,<2.0
 # Event files exported as PDF. TSV-only workflows do not import this package,
 # but it is included so every Web UI mode works from one installation.
 pdfplumber>=0.10,<1.0
+
+# Additional dependencies for running the test suite (tests/).
+pytest>=7.0,<9.0

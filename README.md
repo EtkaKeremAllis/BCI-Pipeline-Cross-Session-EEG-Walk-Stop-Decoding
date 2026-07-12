@@ -52,9 +52,11 @@ Continuous recordings are processed independently. In multi-session training, re
 
 ## Installation and quick start
 
-Python 3.9 or newer is required. Runtime dependencies are listed in
-[`requirements.txt`](requirements.txt). See [`SETUP.md`](SETUP.md) for detailed
-Windows, Linux, macOS, Python PATH, and PowerShell troubleshooting instructions.
+Python 3.10 or newer is expected to work. The currently verified environment
+uses Python 3.13.14. Other Python versions have not yet been systematically tested.
+
+See [`requirements.txt`](requirements.txt) and [`SETUP.md`](SETUP.md) for detailed
+Python PATH, and PowerShell troubleshooting instructions.
 
 ### Windows PowerShell
 
@@ -175,8 +177,6 @@ Supported balancing settings:
 - `--balance-classes downsample`
 - `--balance-subjects none`
 - `--balance-subjects downsample`
-
-Although the parser currently accepts `--balance-classes class_weight`, class weighting is not implemented in v2.8. Do not use it.
 
 ## Timeline validation
 
