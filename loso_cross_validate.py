@@ -102,6 +102,7 @@ def run_loso(dataset_list_csv, output_dir, dataset_dir='.', **train_kwargs):
             with open(metrics_path) as f:
                 metrics = json.load(f)
 
+            per_class = metrics['smoothed']['per_class']
             per_session_rows.append({
                 'held_out_subject': held_out,
                 'session': test_row['session'],
@@ -110,6 +111,8 @@ def run_loso(dataset_list_csv, output_dir, dataset_dir='.', **train_kwargs):
                 'deployment_accuracy_non_idle': metrics['deployment_accuracy_non_idle'],
                 'walk_recall': metrics['walk_recall'],
                 'stop_recall': metrics['stop_recall'],
+                'walk_f1': per_class['WALK']['f1'],
+                'stop_f1': per_class['STOP']['f1'],
                 'collapse_warning': metrics['collapse_warning'],
                 'dominant_prediction_fraction': metrics['dominant_prediction_fraction'],
             })
@@ -120,15 +123,21 @@ def run_loso(dataset_list_csv, output_dir, dataset_dir='.', **train_kwargs):
         writer.writeheader()
         writer.writerows(per_session_rows)
 
+    def _safe_mean(values):
+        clean = [v for v in values if v is not None and not (isinstance(v, float) and v != v)]
+        return statistics.fmean(clean) if clean else float('nan')
+
     fold_summaries = []
     for held_out in subjects:
         sessions = [r for r in per_session_rows if r['held_out_subject'] == held_out]
         fold_summaries.append({
             'held_out_subject': held_out,
             'n_sessions': len(sessions),
-            'mean_balanced_accuracy': statistics.fmean(r['balanced_accuracy'] for r in sessions),
-            'mean_deployment_accuracy_non_idle': statistics.fmean(
+            'mean_balanced_accuracy': _safe_mean(r['balanced_accuracy'] for r in sessions),
+            'mean_deployment_accuracy_non_idle': _safe_mean(
                 r['deployment_accuracy_non_idle'] for r in sessions),
+            'mean_walk_f1': _safe_mean(r['walk_f1'] for r in sessions),
+            'mean_stop_f1': _safe_mean(r['stop_f1'] for r in sessions),
             'any_collapse_warning': any(r['collapse_warning'] for r in sessions),
         })
 
