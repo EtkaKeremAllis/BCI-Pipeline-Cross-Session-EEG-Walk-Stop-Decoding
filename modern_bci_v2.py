@@ -285,8 +285,15 @@ class FIRBandpassFilter:
         self.fs = sampling_rate
         self.order = order if order % 2 == 1 else order + 1
         nyquist = sampling_rate / 2
+        # pass_zero=False is required: with two cutoff frequencies, firwin's
+        # default (pass_zero=True) builds a BANDSTOP filter (passes DC and
+        # near-Nyquist, blocks the band in between) instead of a bandpass
+        # filter. Without this, [low_freq, high_freq] was being blocked
+        # rather than kept - i.e. the entire useful EEG band was discarded
+        # and near-DC drift / near-Nyquist noise was kept instead.
         self.taps = signal.firwin(
-            self.order, [low_freq / nyquist, high_freq / nyquist], window='hamming'
+            self.order, [low_freq / nyquist, high_freq / nyquist], window='hamming',
+            pass_zero=False,
         )
 
     def apply_offline(self, signal_data: np.ndarray) -> np.ndarray:
