@@ -5,7 +5,7 @@
 
 ## Reproducibility metadata
 
-- **Code commit used for the reported benchmark:** `[Experiment commit](https://github.com/EtkaKeremAllis/BCI-Pipeline-Cross-Session-EEG-Walk-Stop-Decoding/commit/d90700b6346e1fe2c1fdd37d180eeb4c67a1bcad)`
+- **Code commit used for the reported benchmark:** `d90700b6346e1fe2c1fdd37d180eeb4c67a1bcad`
 - **Operating system:** Windows 11 Pro
 - **Python:** 3.13.14
 - **Python executable:** `C:\Users\kerem\AppData\Local\Programs\Python\Python313\python.exe`
@@ -16,7 +16,7 @@
 
 The reported benchmark was executed with the Python interpreter shown above. MNE and scikit-learn were not installed and were not required by the pipeline.
 
-> Replace `[Experiment commit](https://github.com/EtkaKeremAllis/BCI-Pipeline-Cross-Session-EEG-Walk-Stop-Decoding/commit/d90700b6346e1fe2c1fdd37d180eeb4c67a1bcad)` with the output of `git rev-parse HEAD` from the exact repository state used to generate the committed result files.
+> Replace `d90700b6346e1fe2c1fdd37d180eeb4c67a1bcad` with the output of `git rev-parse HEAD` from the exact repository state used to generate the committed result files.
 
 ## Headline result
 
