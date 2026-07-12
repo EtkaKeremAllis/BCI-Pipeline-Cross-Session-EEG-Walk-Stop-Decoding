@@ -1,7 +1,7 @@
 # EEG Walk/Stop BCI — Experimental Results
 
 > **Current evidence level:** exploratory same-subject cross-session development benchmark.  
-> **Cross-subject performance:** not yet claimed; the frozen evaluation runner is included in this repository.
+> **Cross-subject performance:** not yet evaluated or claimed.
 
 ## Reproducibility metadata
 
@@ -98,22 +98,9 @@ All rows below are means across the two reciprocal `sub-02` directions. These ar
 | 9 | `motor3` | `zscore` | 25 | 0.35 | 3 | 77.96% | **76.42%** | 75.72% | False |
 | 10 | `motor3` | `zscore` | 25 | 0.20 | 1 | 77.76% | **76.32%** | 75.29% | False |
 
-## Cross-subject and broader cross-session evaluation
-
-The dataset contains seven participants and nine longitudinal sessions per participant. The public data are from OpenNeuro dataset `ds007788` (version `1.0.1`, CC0). The repository includes a fixed-protocol runner that discovers all available training recordings and evaluates:
-
-1. **Within-subject leave-one-session-out:** train on the other sessions of one participant and test the held-out session.
-2. **Cross-subject leave-one-subject-out:** train on all other participants and test every session of the held-out participant.
-
-| Protocol | Intended folds | Hyperparameter tuning on test folds | Current status |
-|---|---:|---|---|
-| Reciprocal development pair (`sub-02`, sessions 01/02) | 2 | Yes — development only | **Completed** |
-| Within-subject leave-one-session-out | Up to 63 | No; configuration frozen | Runner ready; raw EDF subset required |
-| Cross-subject leave-one-subject-out | Up to 63 test sessions / 7 shared models | No; configuration frozen | Runner ready; raw EDF subset required |
-
-No cross-subject number is shown here until those folds have actually completed. This avoids presenting a planned benchmark as measured evidence.
-
 ## Reproduction
+
+Only the two reciprocal `sub-02` commands below are documented here because the repository currently contains the corresponding EDF/TSV inputs and example outputs. No unavailable benchmark scripts are referenced.
 
 ### Exact commands for the reported frozen reciprocal benchmark
 
@@ -184,43 +171,6 @@ py .\bci_pipeline_v2.8.py `
 ```
 
 The validation command writes the original pipeline output names, including `timeline_metrics.json`, `validated_timeline.csv`, and the raw/smoothed confusion matrices. The committed example folders may use clearer presentation names such as `metrics.json` and `timeline_predictions.csv`; their numerical contents come from these validation runs.
-
-### Optional broader benchmark
-
-#### 1. Download the required dataset subset
-
-On Windows PowerShell:
-
-```powershell
-.\scripts\download_benchmark_data.ps1
-```
-
-This downloads only the `task-training` EDF files and their `rexcommand` event TSV files, not the full dataset.
-
-#### 2. Run the frozen benchmark
-
-```powershell
-.\scripts\run_benchmark.ps1
-```
-
-Or directly:
-
-```powershell
-py scripts/benchmark_cross_subject.py `
-  --dataset-root data/ds007788 `
-  --pipeline bci_pipeline_v2.8.py `
-  --output-root results/cross_subject_session `
-  --protocol all `
-  --resume
-```
-
-The runner writes:
-
-- `benchmark_results.csv` — one row per held-out recording
-- `benchmark_aggregate.csv` — subject/protocol-level means
-- `benchmark_results.json` — complete machine-readable output
-- `CROSS_SUBJECT_RESULTS.md` — a GitHub-renderable results table
-- per-fold logs, timelines, confusion matrices, and collapse reports
 
 ## Interpretation and limitations
 
