@@ -16,8 +16,6 @@
 
 The reported benchmark was executed with the Python interpreter shown above. MNE and scikit-learn were not installed and were not required by the pipeline.
 
-> Replace `d90700b6346e1fe2c1fdd37d180eeb4c67a1bcad` with the output of `git rev-parse HEAD` from the exact repository state used to generate the committed result files.
-
 ## Headline result
 
 The current best low-cost configuration uses only **three motor-area electrodes (C3, Cz, C4)** and reached **77.95% mean balanced accuracy** in reciprocal cross-session validation on `sub-02`.
