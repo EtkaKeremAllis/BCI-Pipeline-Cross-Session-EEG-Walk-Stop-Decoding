@@ -135,13 +135,36 @@ def resolve_channels(signals, channel_set):
         )
 
     wanted = CHANNEL_SETS[channel_set]
-    missing = [ch for ch in wanted if ch not in signals]
-    if missing:
+
+    # Exact match first; fall back to a case-insensitive match against the
+    # EDF's actual channel names (some EEG systems export e.g. "CZ" instead
+    # of "Cz"). The real channel name (with the EDF's original casing) is
+    # what gets returned, since that's the key used for all later signals[]
+    # lookups.
+    case_insensitive_lookup = {ch.upper(): ch for ch in signals}
+    resolved = []
+    still_missing = []
+    case_fallback_used = []
+    for ch in wanted:
+        if ch in signals:
+            resolved.append(ch)
+        elif ch.upper() in case_insensitive_lookup:
+            actual = case_insensitive_lookup[ch.upper()]
+            resolved.append(actual)
+            case_fallback_used.append((ch, actual))
+        else:
+            still_missing.append(ch)
+
+    if case_fallback_used:
+        print(f"[*] Channel name case mismatch resolved via case-insensitive "
+              f"fallback: {case_fallback_used}")
+
+    if still_missing:
         raise SystemExit(
-            f"Required channel(s) for channel_set={channel_set} are missing from the EDF: {missing}.\n"
+            f"Required channel(s) for channel_set={channel_set} are missing from the EDF: {still_missing}.\n"
             f"Available EDF channels: {list(signals.keys())}"
         )
-    return list(wanted)
+    return resolved
 
 
 # ============================================================================
