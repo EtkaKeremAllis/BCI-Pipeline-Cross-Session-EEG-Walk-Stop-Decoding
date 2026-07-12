@@ -1,0 +1,120 @@
+{
+  "edf": "sub-02/ses-01/eeg",
+  "sampling_rate": 100.0,
+  "channel_normalization": "zscore",
+  "signal_len_samples": 24798,
+  "duration_seconds": 247.98,
+  "window_len": 3.0,
+  "step_len": 0.25,
+  "n_windows": 980,
+  "events": "sub-02/ses-01/events",
+  "validation_available": true,
+  "accuracy_computed": true,
+  "smoothing_window": 5,
+  "total_windows": 980,
+  "raw": {
+    "total_windows": 980,
+    "prediction_counts": {
+      "STOP": 712,
+      "WALK": 268,
+      "IDLE": 0
+    },
+    "per_class": {
+      "STOP": {
+        "precision": 0.8019662921348315,
+        "recall": 0.9299674267100977,
+        "f1": 0.8612368024132732,
+        "support": 614
+      },
+      "WALK": {
+        "precision": 0.8395522388059702,
+        "recall": 0.6147540983606558,
+        "f1": 0.7097791798107255,
+        "support": 366
+      },
+      "IDLE": {
+        "precision": null,
+        "recall": null,
+        "f1": null,
+        "support": 0
+      }
+    },
+    "walk_recall": 0.6147540983606558,
+    "stop_recall": 0.9299674267100977,
+    "deployment_accuracy_non_idle": 0.8122448979591836,
+    "balanced_accuracy": 0.7723607625353768,
+    "n_non_idle_ground_truth_windows": 980,
+    "idle_false_positive_rate": 0.0,
+    "collapse_warning": false,
+    "dominant_prediction_fraction": 0.726530612244898
+  },
+  "smoothed": {
+    "total_windows": 980,
+    "prediction_counts": {
+      "STOP": 716,
+      "WALK": 264,
+      "IDLE": 0
+    },
+    "per_class": {
+      "STOP": {
+        "precision": 0.8114525139664804,
+        "recall": 0.9462540716612378,
+        "f1": 0.8736842105263158,
+        "support": 614
+      },
+      "WALK": {
+        "precision": 0.875,
+        "recall": 0.6311475409836066,
+        "f1": 0.7333333333333333,
+        "support": 366
+      },
+      "IDLE": {
+        "precision": null,
+        "recall": null,
+        "f1": null,
+        "support": 0
+      }
+    },
+    "walk_recall": 0.6311475409836066,
+    "stop_recall": 0.9462540716612378,
+    "deployment_accuracy_non_idle": 0.8285714285714286,
+    "balanced_accuracy": 0.7887008063224221,
+    "n_non_idle_ground_truth_windows": 980,
+    "idle_false_positive_rate": 0.0,
+    "collapse_warning": false,
+    "dominant_prediction_fraction": 0.7306122448979592
+  },
+  "prediction_counts": {
+    "STOP": 716,
+    "WALK": 264,
+    "IDLE": 0
+  },
+  "per_class": {
+    "STOP": {
+      "precision": 0.8114525139664804,
+      "recall": 0.9462540716612378,
+      "f1": 0.8736842105263158,
+      "support": 614
+    },
+    "WALK": {
+      "precision": 0.875,
+      "recall": 0.6311475409836066,
+      "f1": 0.7333333333333333,
+      "support": 366
+    },
+    "IDLE": {
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "support": 0
+    }
+  },
+  "walk_recall": 0.6311475409836066,
+  "stop_recall": 0.9462540716612378,
+  "deployment_accuracy_non_idle": 0.8285714285714286,
+  "balanced_accuracy": 0.7887008063224221,
+  "n_non_idle_ground_truth_windows": 980,
+  "idle_false_positive_rate": 0.0,
+  "collapse_warning": false,
+  "dominant_prediction_fraction": 0.7306122448979592
+}
