@@ -184,10 +184,17 @@ The validation command writes the original pipeline output names, including `tim
 
 ## Data and machine-readable files
 
-- [`results/verified_sub02_cross_session.csv`](results/verified_sub02_cross_session.csv)
-- [`results/channel_set_comparison.csv`](results/channel_set_comparison.csv)
-- [`results/optimization_top10.csv`](results/optimization_top10.csv)
-- [`results/verified_results.json`](results/verified_results.json)
+### Session 01 → Session 02
+
+- [`session01_to_session02/metrics.json`](session01_to_session02/metrics.json)
+- [`session01_to_session02/commands.csv`](session01_to_session02/commands.csv)
+- [`session01_to_session02/confusion_matrix.csv`](session01_to_session02/confusion_matrix.csv)
+
+### Session 02 → Session 01
+
+- [`session02_to_session01/metrics.json`](session02_to_session01/metrics.json)
+- [`session02_to_session01/commands.csv`](session02_to_session01/commands.csv)
+- [`session02_to_session01/confusion_matrix.csv`](session02_to_session01/confusion_matrix.csv)
 
 ## Dataset attribution
 
