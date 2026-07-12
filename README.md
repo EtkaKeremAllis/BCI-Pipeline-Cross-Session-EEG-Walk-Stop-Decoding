@@ -50,36 +50,37 @@ Continuous recordings are processed independently. In multi-session training, re
 | `parse_events.py` | BIDS-style TSV and legacy PDF event parsing |
 | `CHANGELOG.md` | Development history |
 
-## Requirements
+## Installation and quick start
 
-- Python 3.9 or newer
-- NumPy
-- SciPy
-- `pdfplumber` only when reading legacy PDF event files
+Python 3.9 or newer is required. Runtime dependencies are listed in
+[`requirements.txt`](requirements.txt). See [`SETUP.md`](SETUP.md) for detailed
+Windows, Linux, macOS, Python PATH, and PowerShell troubleshooting instructions.
 
-Install the required packages in a virtual environment:
+### Windows PowerShell
 
-```bash
-python -m venv .venv
-```
-
-Windows PowerShell:
+Run these commands from the repository directory:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install numpy scipy pdfplumber
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -X utf8 bci_web_ui.py
 ```
 
-Linux/macOS:
+If `py` is unavailable, use the full path to the installed `python.exe` when
+creating `.venv`. Activation is optional.
+
+### Linux/macOS
 
 ```bash
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install numpy scipy pdfplumber
+python -m pip install -r requirements.txt
+python -X utf8 bci_web_ui.py
 ```
 
-`pdfplumber` may be omitted if all event files are TSV files.
+Then open <http://127.0.0.1:8765> and stop the server with `Ctrl+C`.
 
 ## Command-line interface
 
