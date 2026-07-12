@@ -3,7 +3,7 @@
 BCI Pipeline Web UI
 ===================
 
-A small, dependency-free local web interface for bci_pipeline_v2.8.py.
+A small, dependency-free local web interface for bci_pipeline_v2.9.py.
 It does not change the pipeline architecture or model logic. It only builds
 and runs the same CLI commands from a browser form.
 
@@ -13,7 +13,7 @@ Run:
 Then open:
     http://127.0.0.1:8765
 
-Recommended: keep this file in the same folder as bci_pipeline_v2.8.py and the
+Recommended: keep this file in the same folder as bci_pipeline_v2.9.py and the
 helper modules imported by that pipeline.
 """
 
@@ -68,6 +68,7 @@ DEFAULTS = {
 def guess_pipeline_path() -> str:
     here = Path(__file__).resolve().parent
     candidates = [
+        here / "bci_pipeline_v2.9.py",
         here / "bci_pipeline_v2.8.py",
         here / "bci_pipeline_v2.8 (1).py",
         here / "bci_pipeline_v2.8(1).py",
@@ -76,7 +77,7 @@ def guess_pipeline_path() -> str:
     for p in candidates:
         if p.exists():
             return str(p)
-    return str(here / "bci_pipeline_v2.8.py")
+    return str(here / "bci_pipeline_v2.9.py")
 
 
 def json_response(handler: BaseHTTPRequestHandler, payload: Dict[str, Any], status: int = 200) -> None:
@@ -195,6 +196,14 @@ def build_command(payload: Dict[str, Any]) -> tuple[Optional[List[str]], List[st
     return cmd, [], pipeline.parent
 
 
+def resolve_output_dir(output_dir: str, cwd: Optional[Path]) -> Path:
+    path = Path(output_dir).expanduser()
+    if not path.is_absolute():
+        base = cwd if cwd is not None else Path.cwd()
+        path = base / path
+    return path.resolve()
+
+
 def read_json(path: Path) -> Optional[Dict[str, Any]]:
     if not path.exists():
         return None
@@ -242,8 +251,8 @@ def counts_to_shares(counts: Dict[str, Any], group: str) -> List[Dict[str, Any]]
     ]
 
 
-def collect_metrics(output_dir: str) -> Dict[str, Any]:
-    out = Path(output_dir).expanduser().resolve()
+def collect_metrics(output_dir: str, cwd: Optional[Path] = None, expect_timeline_metrics: bool = False) -> Dict[str, Any]:
+    out = resolve_output_dir(output_dir, cwd)
     bars: List[Dict[str, Any]] = []
     shares: List[Dict[str, Any]] = []
     files: List[Dict[str, str]] = []
@@ -271,10 +280,16 @@ def collect_metrics(output_dir: str) -> Dict[str, Any]:
         if path.exists():
             files.append({"name": filename, "path": str(path)})
 
+    if expect_timeline_metrics and timeline is None:
+        notes.append(
+            "An events file was supplied, but timeline_metrics.json was not found in the resolved output directory. "
+            "Accuracy and balanced accuracy could not be displayed."
+        )
+
     if timeline:
         for stream_name, stream_label in [("smoothed", "Smoothed"), ("raw", "Raw")]:
             stream = timeline.get(stream_name, {}) or {}
-            add_bar(bars, f"{stream_label} deployment accuracy", stream.get("deployment_accuracy_non_idle"), "Validation")
+            add_bar(bars, f"{stream_label} window-level accuracy", stream.get("deployment_accuracy_non_idle"), "Validation")
             add_bar(bars, f"{stream_label} balanced accuracy", stream.get("balanced_accuracy"), "Validation")
             add_bar(bars, f"{stream_label} WALK recall", stream.get("walk_recall"), "Validation")
             add_bar(bars, f"{stream_label} STOP recall", stream.get("stop_recall"), "Validation")
@@ -779,7 +794,7 @@ showByMode();
 
 
 class BCIWebHandler(BaseHTTPRequestHandler):
-    server_version = "BCIWebUI/1.0"
+    server_version = "BCIWebUI/1.1"
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
@@ -846,7 +861,15 @@ class BCIWebHandler(BaseHTTPRequestHandler):
         if proc.stderr:
             print("\n--- Pipeline stderr ---\n" + proc.stderr, file=sys.stderr)
 
-        metrics = collect_metrics(output_dir)
+        expect_timeline_metrics = (
+            clean_string(payload.get("mode")) == "validate_timeline"
+            and bool(clean_string(payload.get("events")))
+        )
+        metrics = collect_metrics(
+            output_dir,
+            cwd=cwd,
+            expect_timeline_metrics=expect_timeline_metrics,
+        )
         if proc.returncode != 0:
             json_response(
                 self,
