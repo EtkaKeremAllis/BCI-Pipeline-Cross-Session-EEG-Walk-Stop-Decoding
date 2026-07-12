@@ -1,4 +1,4 @@
-# Runtime dependencies for bci_web_ui.py and bci_pipeline_v2.8.py
+# Runtime dependencies for bci_web_ui.py and bci_pipeline_v2.9.py
 # Expected Python versions: 3.10+
 # Verified environment: Python 3.13.14
 
