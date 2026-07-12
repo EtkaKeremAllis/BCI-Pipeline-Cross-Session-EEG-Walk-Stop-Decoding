@@ -178,8 +178,6 @@ Supported balancing settings:
 - `--balance-subjects none`
 - `--balance-subjects downsample`
 
-Although the parser currently accepts `--balance-classes class_weight`, class weighting is not implemented in v2.8. Do not use it.
-
 ## Timeline validation
 
 Supply an events file to calculate timeline metrics:
