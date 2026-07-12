@@ -84,6 +84,29 @@ python -X utf8 bci_web_ui.py
 
 Then open <http://127.0.0.1:8765> and stop the server with `Ctrl+C`.
 
+## Testing
+
+Unit tests (`tests/`) cover the core signal-processing and ML logic (CSP,
+feature selection, LDA, sliding windows, temporal smoothing, the IDLE gate)
+against synthetic data with known ground truth:
+
+```bash
+pytest tests/ -v
+```
+
+`tests/test_smoke_synthetic_pipeline.py` is an end-to-end smoke test: it
+generates a synthetic EEG recording (`tests/synthetic_data.py`), writes it
+to a real EDF file, and runs it through the actual `train` -> `validate_timeline`
+CLI flow - no real recording required. It also acts as a regression guard
+against the "model collapse" bug from `CHANGELOG.md` (v3.0): if training and
+prediction ever fall out of distribution sync again, this test's
+`collapse_warning` assertions will fail.
+
+**Run the full test suite (`pytest tests/ -v`) after any change to
+`bci_pipeline_v2.8.py`, `modern_bci_v2.py`, `edf_reader.py`, or
+`parse_events.py`** - it catches structural regressions well before you'd
+notice them in a real multi-minute training run on real data.
+
 ## Command-line interface
 
 Show the complete interface:
