@@ -54,7 +54,8 @@ located there. Run the following commands from the repository directory.
 
 ## 3. Check Python
 
-The project requires Python 3.9 or newer.
+The currently verified environment uses Python 3.13.14. Python 3.10–3.13 is
+recommended, but not every version in this range has been systematically tested.
 
 ### Windows
 
@@ -65,7 +66,7 @@ py --version
 python --version
 ```
 
-If either command prints Python 3.9 or newer, use that command in the next
+If either command prints Python 3.10 or newer, use that command in the next
 step.
 
 If Windows reports `Python was not found`, Python may be installed without
