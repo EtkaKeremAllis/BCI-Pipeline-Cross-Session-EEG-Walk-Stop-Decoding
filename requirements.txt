@@ -1,5 +1,6 @@
 # Runtime dependencies for bci_web_ui.py and bci_pipeline_v2.8.py
-# Supported Python version: 3.9+
+# Expected Python versions: 3.10+
+# Verified environment: Python 3.13.14
 
 # Numerical arrays, model persistence, and signal data processing
 numpy>=1.24,<3.0
