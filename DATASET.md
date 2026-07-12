@@ -38,7 +38,7 @@ This pipeline's `motor3` channel set (`C3`, `Cz`, `C4`) and other `motorN` prese
 | `x8` | Walk command sent to Rex | `WALK` (1) |
 | `x99` | Idle | dropped (not in `DEFAULT_LABEL_MAP`) |
 
-This confirms `DEFAULT_LABEL_MAP = {'x5': 0, 'x8': 1}` in `bci_pipeline_v2.8.py` matches the dataset's own documented scheme exactly.
+This confirms `DEFAULT_LABEL_MAP = {'x5': 0, 'x8': 1}` in `bci_pipeline_v2.9.py` matches the dataset's own documented scheme exactly.
 
 `acq-rexstate` files log the exoskeleton's actual state feedback (not currently consumed by this pipeline); `acq-infoclosedloop` and `recording-*_stim` files (closed-loop trials only) are BMI-prediction/beep/fail-counter logs, also not currently used.
 
@@ -56,7 +56,7 @@ Only a subset of the full dataset is kept here — see "Getting more data" below
 | sub-02 | ses-01, ses-02 | training | `.tsv` |
 | sub-03 | ses-01 | training | `.tsv` |
 
-Layout follows BIDS: `sub-<ID>/ses-<ID>/eeg/sub-<ID>_ses-<ID>_task-<task>[_acq-<label>]_<suffix>.<ext>`. `train_list.txt` at the repo root lists all sessions above in the `--dataset-list` CSV format consumed by `bci_pipeline_v2.8.py --mode train_multi` (paths are relative; run with `--dataset-dir .` from the repo root).
+Layout follows BIDS: `sub-<ID>/ses-<ID>/eeg/sub-<ID>_ses-<ID>_task-<task>[_acq-<label>]_<suffix>.<ext>`. `train_list.txt` at the repo root lists all sessions above in the `--dataset-list` CSV format consumed by `bci_pipeline_v2.9.py --mode train_multi` (paths are relative; run with `--dataset-dir .` from the repo root).
 
 Only `training`-task recordings were pulled in; `trial01-12`, `walk6min`, and `stop6min` (closed-loop and extended blocks) exist upstream but are not in this repo.
 

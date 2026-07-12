@@ -4,7 +4,7 @@ points (run_train / run_validate_timeline), using only synthetic data
 (tests/synthetic_data.py) - no real EEG recording required.
 
 Run this after any significant change to the core pipeline
-(bci_pipeline_v2.8.py, modern_bci_v2.py, edf_reader.py, parse_events.py):
+(the main bci_pipeline_v*.py script, modern_bci_v2.py, edf_reader.py, parse_events.py):
 
     pytest tests/test_smoke_synthetic_pipeline.py -v
 
