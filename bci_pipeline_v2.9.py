@@ -1,7 +1,7 @@
 """
-bci_pipeline_v2.8.py
+bci_pipeline_v2.9.py
 ====================
-EEG Walk/Stop BCI - v2.8
+EEG Walk/Stop BCI - v2.9
 
 Critical design-error fix from the brief:
   Training data (labeled event windows) != Prediction data (sliding windows
