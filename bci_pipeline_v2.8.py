@@ -1634,7 +1634,7 @@ def main():
     parser.add_argument('--confidence-threshold', type=float, default=0.45)
     parser.add_argument('--n-features-select', type=int, default=45)
     parser.add_argument('--lda-shrinkage', type=float, default=0.0)
-    parser.add_argument('--balance-classes', choices=['none', 'downsample', 'class_weight'],
+    parser.add_argument('--balance-classes', choices=['none', 'downsample'],
                          default='none', help='Method for addressing class imbalance '
                                                '(default: none). Currently only downsample is implemented.')
     parser.add_argument('--balance-subjects', choices=['none', 'downsample'], default='none',
