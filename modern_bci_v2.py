@@ -274,6 +274,7 @@ class SimpleLDA:
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         decision = self.decision_function(X)
+        decision = np.clip(decision, -500, 500)
         proba = 1 / (1 + np.exp(-decision))
         return np.column_stack([1 - proba, proba])
 
