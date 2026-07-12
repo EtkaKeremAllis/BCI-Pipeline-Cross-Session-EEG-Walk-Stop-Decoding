@@ -1,0 +1,20 @@
+BCI Walk/Stop Model - Training Summary
+==================================================
+EDF: ./sub-02/ses-01/eeg/sub-02_ses-01_task-training_eeg.edf
+Events: ./sub-02/ses-01/eeg/sub-02_ses-01_task-training_acq-rexcommand_events.tsv
+Channel set: motor3
+Channel normalization: zscore
+Label map: {'x5': 0, 'x8': 1}
+Channels: ['C3', 'Cz', 'C4']
+Sampling rate: 100.0
+Train windows: 69 (STOP=45, WALK=24)
+CSP: True, n_features_select: 25, lda_shrinkage: 0.1
+idle_distance_threshold: 999.0, confidence_threshold: 0.45
+
+Class balancing: none (seed=42)
+  Not applied. STOP=45, WALK=24
+
+SCIENTIFIC INTEGRITY: This model uses a pretrained model to predict
+Walk/Stop command periods from EEG. It is not a proven decoder of pure
+brain-internal walking intention. Performance depends on the training
+data, artifacts, and subject/session similarity.

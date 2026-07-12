@@ -1,0 +1,120 @@
+{
+  "edf": "./sub-02/ses-01/eeg/sub-02_ses-01_task-training_eeg.edf",
+  "sampling_rate": 100.0,
+  "channel_normalization": "zscore",
+  "signal_len_samples": 24798,
+  "duration_seconds": 247.98,
+  "window_len": 3.0,
+  "step_len": 0.25,
+  "n_windows": 980,
+  "events": "./sub-02/ses-01/eeg/sub-02_ses-01_task-training_acq-rexcommand_events.tsv",
+  "validation_available": true,
+  "accuracy_computed": true,
+  "smoothing_window": 5,
+  "total_windows": 980,
+  "raw": {
+    "total_windows": 980,
+    "prediction_counts": {
+      "STOP": 621,
+      "WALK": 359,
+      "IDLE": 0
+    },
+    "per_class": {
+      "STOP": {
+        "precision": 0.8985507246376812,
+        "recall": 0.9087947882736156,
+        "f1": 0.9036437246963562,
+        "support": 614
+      },
+      "WALK": {
+        "precision": 0.8440111420612814,
+        "recall": 0.8278688524590164,
+        "f1": 0.8358620689655173,
+        "support": 366
+      },
+      "IDLE": {
+        "precision": NaN,
+        "recall": NaN,
+        "f1": NaN,
+        "support": 0
+      }
+    },
+    "walk_recall": 0.8278688524590164,
+    "stop_recall": 0.9087947882736156,
+    "deployment_accuracy_non_idle": 0.8785714285714286,
+    "balanced_accuracy": 0.868331820366316,
+    "n_non_idle_ground_truth_windows": 980,
+    "idle_false_positive_rate": 0.0,
+    "collapse_warning": false,
+    "dominant_prediction_fraction": 0.6336734693877552
+  },
+  "smoothed": {
+    "total_windows": 980,
+    "prediction_counts": {
+      "STOP": 622,
+      "WALK": 358,
+      "IDLE": 0
+    },
+    "per_class": {
+      "STOP": {
+        "precision": 0.9147909967845659,
+        "recall": 0.9267100977198697,
+        "f1": 0.9207119741100324,
+        "support": 614
+      },
+      "WALK": {
+        "precision": 0.8743016759776536,
+        "recall": 0.855191256830601,
+        "f1": 0.8646408839779005,
+        "support": 366
+      },
+      "IDLE": {
+        "precision": NaN,
+        "recall": NaN,
+        "f1": NaN,
+        "support": 0
+      }
+    },
+    "walk_recall": 0.855191256830601,
+    "stop_recall": 0.9267100977198697,
+    "deployment_accuracy_non_idle": 0.9,
+    "balanced_accuracy": 0.8909506772752354,
+    "n_non_idle_ground_truth_windows": 980,
+    "idle_false_positive_rate": 0.0,
+    "collapse_warning": false,
+    "dominant_prediction_fraction": 0.6346938775510204
+  },
+  "prediction_counts": {
+    "STOP": 622,
+    "WALK": 358,
+    "IDLE": 0
+  },
+  "per_class": {
+    "STOP": {
+      "precision": 0.9147909967845659,
+      "recall": 0.9267100977198697,
+      "f1": 0.9207119741100324,
+      "support": 614
+    },
+    "WALK": {
+      "precision": 0.8743016759776536,
+      "recall": 0.855191256830601,
+      "f1": 0.8646408839779005,
+      "support": 366
+    },
+    "IDLE": {
+      "precision": NaN,
+      "recall": NaN,
+      "f1": NaN,
+      "support": 0
+    }
+  },
+  "walk_recall": 0.855191256830601,
+  "stop_recall": 0.9267100977198697,
+  "deployment_accuracy_non_idle": 0.9,
+  "balanced_accuracy": 0.8909506772752354,
+  "n_non_idle_ground_truth_windows": 980,
+  "idle_false_positive_rate": 0.0,
+  "collapse_warning": false,
+  "dominant_prediction_fraction": 0.6346938775510204
+}

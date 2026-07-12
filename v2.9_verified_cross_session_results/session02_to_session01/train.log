@@ -1,0 +1,12 @@
+======================================================================
+MODE: train
+======================================================================
+[*] Channel set motor3: 3 channels -> ['C3', 'Cz', 'C4']
+[*] Channel normalization: zscore
+[*] Label map: {'x5': 0, 'x8': 1}
+[*] EDF: 24798 samples @ 100Hz
+[*] Events: 13 usable
+[*] Extracted 69 training windows (event-anchored, non-overlapping, 3.0s)
+[+] Training completed: STOP=45, WALK=24
+[+] Selected feature indices: [82, 28, 33, 38, 29, 65, 56, 55, 84, 60, 2, 11, 1, 6, 67, 32, 34, 13, 40, 61, 59, 15, 7, 5, 30]
+[+] Model saved: ./results.actual_v29/session02_to_session01/model/

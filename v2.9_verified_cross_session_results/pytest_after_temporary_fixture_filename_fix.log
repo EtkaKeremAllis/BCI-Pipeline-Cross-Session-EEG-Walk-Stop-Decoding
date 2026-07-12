@@ -1,0 +1,9 @@
+........................                                                 [100%]
+=============================== warnings summary ===============================
+tests/test_idle_gate.py::test_predict_window_classifies_correctly_when_gates_are_open
+tests/test_smoke_synthetic_pipeline.py::test_synthetic_train_and_validate_end_to_end
+  /mnt/data/v29_actual_run/BCI-Pipeline-Cross-Session-EEG-Walk-Stop-Decoding-master/modern_bci_v2.py:277: RuntimeWarning: overflow encountered in exp
+    proba = 1 / (1 + np.exp(-decision))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+24 passed, 2 warnings in 3.16s

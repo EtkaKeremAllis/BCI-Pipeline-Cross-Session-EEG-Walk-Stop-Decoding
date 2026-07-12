@@ -1,0 +1,47 @@
+# Session 01 -> Session 02
+python bci_pipeline_v2.9.py \
+  --mode train \
+  --edf ./sub-02/ses-01/eeg/sub-02_ses-01_task-training_eeg.edf \
+  --events ./sub-02/ses-01/eeg/sub-02_ses-01_task-training_acq-rexcommand_events.tsv \
+  --output-dir ./results.actual_v29/session01_to_session02/model \
+  --channel-set motor3 \
+  --channel-normalization zscore \
+  --n-features-select 25 \
+  --lda-shrinkage 0.1 \
+  --balance-classes none \
+  --confidence-threshold 0.45 \
+  --idle-distance-threshold 999 \
+  --seed 42
+
+python bci_pipeline_v2.9.py \
+  --mode validate_timeline \
+  --edf ./sub-02/ses-02/eeg/sub-02_ses-02_task-training_eeg.edf \
+  --events ./sub-02/ses-02/eeg/sub-02_ses-02_task-training_acq-rexcommand_events.tsv \
+  --model ./results.actual_v29/session01_to_session02/model \
+  --output-dir ./results.actual_v29/session01_to_session02 \
+  --event-overlap-threshold 0.5 \
+  --smoothing-window 5
+
+# Session 02 -> Session 01
+python bci_pipeline_v2.9.py \
+  --mode train \
+  --edf ./sub-02/ses-02/eeg/sub-02_ses-02_task-training_eeg.edf \
+  --events ./sub-02/ses-02/eeg/sub-02_ses-02_task-training_acq-rexcommand_events.tsv \
+  --output-dir ./results.actual_v29/session02_to_session01/model \
+  --channel-set motor3 \
+  --channel-normalization zscore \
+  --n-features-select 25 \
+  --lda-shrinkage 0.1 \
+  --balance-classes none \
+  --confidence-threshold 0.45 \
+  --idle-distance-threshold 999 \
+  --seed 42
+
+python bci_pipeline_v2.9.py \
+  --mode validate_timeline \
+  --edf ./sub-02/ses-01/eeg/sub-02_ses-01_task-training_eeg.edf \
+  --events ./sub-02/ses-01/eeg/sub-02_ses-01_task-training_acq-rexcommand_events.tsv \
+  --model ./results.actual_v29/session02_to_session01/model \
+  --output-dir ./results.actual_v29/session02_to_session01 \
+  --event-overlap-threshold 0.5 \
+  --smoothing-window 5

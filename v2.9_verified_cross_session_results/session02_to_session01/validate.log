@@ -1,0 +1,31 @@
+======================================================================
+MODE: validate_timeline
+======================================================================
+[*] Channel normalization: zscore (loaded from model)
+[*] Label map: {'x5': 0, 'x8': 1} (loaded from model)
+[*] Built 980 sliding windows (window=3.0s, step=0.25s, over the full recording)
+[*] Temporal smoothing window: 5 (centered majority vote)
+
+[+] RAW prediction distribution: {'STOP': 621, 'WALK': 359, 'IDLE': 0}
+[+] SMOOTHED prediction distribution: {'STOP': 622, 'WALK': 358, 'IDLE': 0}
+[SMOOTHED] Accuracy: 90.00%  Balanced: 89.10%
+[RAW]      Accuracy: 87.86%  Balanced: 86.83%
+[+] SMOOTHED WALK recall: 85.52%
+[+] SMOOTHED STOP recall: 92.67%
+[+] SMOOTHED IDLE false positive rate: 0.00%
+
+Confusion matrix RAW (rows=true, columns=predicted):
+               pred_STOP   pred_WALK   pred_IDLE
+   true_STOP         558          56           0
+   true_WALK          63         303           0
+   true_IDLE           0           0           0
+
+Confusion matrix SMOOTHED (rows=true, columns=predicted):
+               pred_STOP   pred_WALK   pred_IDLE
+   true_STOP         569          45           0
+   true_WALK          53         313           0
+   true_IDLE           0           0           0
+
+[+] No collapse: smoothed dominant prediction 63.5% (<90%), WALK count>0.
+
+[+] Outputs: ./results.actual_v29/session02_to_session01/validated_timeline.csv, timeline_confusion_matrix_raw.csv, timeline_confusion_matrix_smoothed.csv, timeline_confusion_matrix.csv, timeline_metrics.json, collapse_report.txt

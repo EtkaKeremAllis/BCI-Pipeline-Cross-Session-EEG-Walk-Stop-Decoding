@@ -1,0 +1,19 @@
+COLLAPSE CHECK
+========================================
+Smoothing window: 5
+Total windows: 980
+RAW prediction counts: {'STOP': 475, 'WALK': 505, 'IDLE': 0}
+SMOOTHED prediction counts: {'STOP': 473, 'WALK': 507, 'IDLE': 0}
+RAW dominant prediction fraction: 51.53%
+SMOOTHED dominant prediction fraction: 51.73%
+RAW WALK count: 505
+SMOOTHED WALK count: 507
+RAW COLLAPSE WARNING: no
+SMOOTHED COLLAPSE WARNING: no
+
+METRICS
+----------------------------------------
+[RAW] Accuracy non-IDLE: 0.7806
+[RAW] Balanced accuracy: 0.8040
+[SMOOTHED] Accuracy non-IDLE: 0.7867
+[SMOOTHED] Balanced accuracy: 0.8110
