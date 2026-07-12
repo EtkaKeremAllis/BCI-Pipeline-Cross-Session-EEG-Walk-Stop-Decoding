@@ -33,9 +33,9 @@
         "support": 366
       },
       "IDLE": {
-        "precision": Null,
-        "recall": Null,
-        "f1": Null,
+        "precision": null,
+        "recall": null,
+        "f1": null,
         "support": 0
       }
     },
