@@ -44,5 +44,91 @@ EEG and producing a symbolic joystick command (WALK/STOP/IDLE).
 • Optional per-channel z-score normalization
 • Model metadata improvements and backward compatibility
 
+## v2.9 — Corrected filtering, Web UI, multi-session training, and regression testing
+
+### Correctness
+
+- Fixed a longstanding FIR filter configuration error in
+  `modern_bci_v2.py`.
+- Added `pass_zero=False` to the two-cutoff `scipy.signal.firwin` call.
+- The previous implementation constructed a band-stop filter instead of the
+  intended band-pass filter, suppressing the configured EEG band while passing
+  near-DC and near-Nyquist components.
+- Models trained before this correction must be retrained.
+- Previously published real-data metrics are considered historical pre-fix
+  results until the benchmark suite is regenerated with v2.9.
+
+### Pipeline
+
+- Renamed the main pipeline entry point from `bci_pipeline_v2.8.py` to
+  `bci_pipeline_v2.9.py`.
+- Retained the original single-session `train`, `validate_timeline`, and
+  `predict` workflows.
+- Added `train_multi` for pooling event-anchored trials from multiple
+  independently preprocessed recordings.
+- Added class downsampling through `--balance-classes downsample`.
+- Added subject downsampling for multi-session training through
+  `--balance-subjects downsample`.
+- Removed the unimplemented `class_weight` option.
+- Added configurable event-label mappings through `--label-map`.
+- Event mappings can be supplied as a JSON object or JSON file and are
+  persisted with the trained model.
+- Added case-insensitive channel-name matching while preserving the original
+  EDF channel names.
+- Added per-recording, per-channel z-score normalization and persisted the
+  normalization mode in model metadata.
+- Added resolved and used training manifests for multi-session provenance.
+
+### Validation and outputs
+
+- Added separate raw and temporally smoothed timeline metrics.
+- Added separate raw and smoothed confusion-matrix files.
+- Preserved backward-compatible metric aliases for the deployment-facing
+  smoothed prediction stream.
+- Expanded collapse diagnostics and prediction-distribution reporting.
+- Improved model metadata, selected-feature reporting, and result provenance.
+
+## Web UI
+
+- Added `bci_web_ui.py`, a dependency-free local browser interface for the
+  v2.9 pipeline.
+- Added support for single-session training, multi-session training, timeline
+  validation, and unlabeled prediction.
+- Added local result summaries, percentage visualizations, generated-file
+  listings, and command reporting.
+- EEG data remains on the local computer; the interface does not upload
+  recordings.
+- The Web UI is an interface around the command-line pipeline and does not
+  change the underlying model or signal-processing logic.
+
+### Testing
+
+- Added a pytest-based unit-test suite covering:
+  - CSP;
+  - feature selection;
+  - shrinkage LDA;
+  - sliding-window construction;
+  - temporal smoothing;
+  - IDLE gating.
+- Added `tests/synthetic_data.py` for controlled synthetic EEG generation.
+- Added a minimal plain-EDF writer for end-to-end file-I/O testing.
+- Added `tests/test_smoke_synthetic_pipeline.py`.
+- The smoke test exercises the complete synthetic
+  `EDF + TSV -> train -> save -> load -> validate_timeline -> metrics` path.
+- Added regression assertions against single-class model collapse.
+- The synthetic smoke test exposed the FIR band-pass configuration error:
+  performance was near chance before the correction and strongly above chance
+  after it.
+- Synthetic-test accuracy is used only as a regression check and must not be
+  interpreted as real EEG decoding performance.
+
+### Documentation
+
+- Added installation and Web UI setup instructions.
+- Added instructions for running the complete test suite:
+
+  ```bash
+  pytest tests/ -v
+
 ---
 
