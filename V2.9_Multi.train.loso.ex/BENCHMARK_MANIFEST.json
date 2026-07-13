@@ -1,0 +1,2623 @@
+{
+  "benchmark_name": "sub-01 training-session-count benchmark",
+  "commit_sha": "25047c459adb0205705cd17abc37bdd952343e45",
+  "pipeline_sha256": "1c8f70e4ef50d99fc5aa18a48c94f87bb2847d642c13426458d4f3ad7e831cfa",
+  "configuration_frozen_before_benchmark": true,
+  "configuration": {
+    "channel_set": "motor3",
+    "channel_normalization": "zscore",
+    "n_features_select": 25,
+    "lda_shrinkage": 0.1,
+    "confidence_threshold": 0.45,
+    "idle_distance_threshold": 999.0,
+    "balance_classes": "none",
+    "balance_subjects": "none",
+    "seed_values": [
+      42,
+      123,
+      2026
+    ],
+    "event_overlap_threshold": 0.5,
+    "smoothing_window": 5,
+    "window_len": 3.0,
+    "step_len": 0.25
+  },
+  "selection_seed": 20260712,
+  "selection_performance_blind": true,
+  "selection_policy": "For each held-out session and train size 1/2/4, three combinations were sampled before model fitting from the complete candidate set using a fixed deterministic selection seed. For train size 7, the only possible combination was used. No result was inspected when choosing sessions.",
+  "all_test_sessions_excluded_from_training": true,
+  "specs": [
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-04"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-04"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-04"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-05"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-05"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-05"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-03"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-03"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-03"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-04",
+        "ses-05"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-04",
+        "ses-05"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-04",
+        "ses-05"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-04",
+        "ses-06"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-04",
+        "ses-06"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-04",
+        "ses-06"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-01",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-06"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-06"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-06"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-03",
+        "ses-04"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-03",
+        "ses-04"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-03",
+        "ses-04"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-04",
+        "ses-05"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-04",
+        "ses-05"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-04",
+        "ses-05"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-04",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-04",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-04",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-03",
+        "ses-04",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-03",
+        "ses-04",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-03",
+        "ses-04",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-01",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-01",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-01",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-02",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-05"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-05"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-05"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-06"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-06"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-06"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-05",
+        "ses-06"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-05",
+        "ses-06"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-05",
+        "ses-06"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-04",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-04",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-04",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-01",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-01",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-01",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-02",
+        "ses-04",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-02",
+        "ses-04",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-02",
+        "ses-04",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-03",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-06"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-06"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-06"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-05",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-05",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-05",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-01",
+        "ses-03",
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-01",
+        "ses-03",
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-01",
+        "ses-03",
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-04",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-03"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-03"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-03"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-04",
+        "ses-06"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-04",
+        "ses-06"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-04",
+        "ses-06"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-03",
+        "ses-04",
+        "ses-06"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-03",
+        "ses-04",
+        "ses-06"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-03",
+        "ses-04",
+        "ses-06"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02",
+        "ses-03",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02",
+        "ses-03",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02",
+        "ses-03",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-02",
+        "ses-04",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-02",
+        "ses-04",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-02",
+        "ses-04",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-05",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-06",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-05"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-05"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-05"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02",
+        "ses-04",
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02",
+        "ses-04",
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02",
+        "ses-04",
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-06",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-07",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-04"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-04"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-04"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-04"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-04"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-04"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03",
+        "ses-06"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03",
+        "ses-06"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03",
+        "ses-06"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-07",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-08"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-04"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-04"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 1,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-04"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-05"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-05"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 1,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-05"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-06"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-06"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 1,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-06"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-04"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-04"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 2,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-04"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-01",
+        "ses-05"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-01",
+        "ses-05"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 2,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-01",
+        "ses-05"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 2,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-04",
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-04",
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 4,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-02",
+        "ses-04",
+        "ses-05",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 4,
+      "combo_index": 2,
+      "train_sessions": [
+        "ses-02",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 4,
+      "combo_index": 3,
+      "train_sessions": [
+        "ses-03",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 42
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 123
+    },
+    {
+      "holdout_session": "ses-08",
+      "n_train_sessions": 7,
+      "combo_index": 1,
+      "train_sessions": [
+        "ses-01",
+        "ses-02",
+        "ses-03",
+        "ses-04",
+        "ses-05",
+        "ses-06",
+        "ses-07"
+      ],
+      "model_seed": 2026
+    }
+  ]
+}
