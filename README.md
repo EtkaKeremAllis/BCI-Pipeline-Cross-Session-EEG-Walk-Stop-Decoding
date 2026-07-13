@@ -6,7 +6,7 @@ The current implementation is `bci_pipeline_v2.9.py`. It supports single-session
 
 ## Experimental results
 
-See [v2.9_verified_cross_session_results/RESULTS.md](v2.9_verified_cross_session_results/RESULTS.md) for the reported reciprocal cross-session benchmark, exact reproduction commands, environment details, machine-readable outputs, and scientific limitations.
+See [v2.9_verified_cross_session_results/VERIFIED_RESULTS.md](v2.9_verified_cross_session_results/VERIFIED_RESULTS.md) for the reported reciprocal cross-session benchmark, exact reproduction commands, environment details, machine-readable outputs, and scientific limitations.
 
 > [!IMPORTANT]
 > This repository implements an offline research pipeline. It does not provide real-time EEG streaming, HID control, or vJoy output. Predictions are generated from fixed EEG recordings and saved to files.
