@@ -1621,7 +1621,7 @@ def run_validate_timeline(edf_path, events_path, model_dir, output_dir,
 # ============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="BCI Walk/Stop pipeline v2.8")
+    parser = argparse.ArgumentParser(description="BCI Walk/Stop pipeline v2.9")
     parser.add_argument('--mode', required=True, choices=['train', 'train_multi', 'validate_timeline', 'predict'])
     parser.add_argument('--edf', default=None, help='(train/validate_timeline/predict)')
     parser.add_argument('--events', default=None)
