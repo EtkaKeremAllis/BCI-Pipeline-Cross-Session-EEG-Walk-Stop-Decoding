@@ -41,14 +41,6 @@ The `90.00%` value is therefore real for the **single direction** `ses-02 -> ses
 
 Both complete train -> validate directions were run a second time in separate fresh output directories. The repeated `timeline_metrics.json` and `validated_timeline.csv` files matched byte-for-byte / value-for-value for both directions.
 
-## Test-suite check
-
-- As shipped in the ZIP: `7 passed, 17 errors`.
-- Cause: `tests/conftest.py` still hardcodes `bci_pipeline_v2.8.py`, which no longer exists.
-- After changing only that fixture filename to `bci_pipeline_v2.9.py` in the extracted test copy: `24 passed, 2 warnings`.
-- The two warnings are NumPy overflow warnings in the logistic probability conversion inside `modern_bci_v2.py`; the tests still pass.
-- `python bci_pipeline_v2.9.py --help` also still describes itself as `pipeline v2.8`. This is a stale version string, not a benchmark failure.
-
 ## Scope
 
 The 980 windows in each direction overlap strongly and are not independent trials. The benchmark evaluates labelled WALK/STOP windows only. IDLE/background rejection and false activations during unlabelled periods are not measured because the IDLE gate is effectively disabled with threshold `999`.
