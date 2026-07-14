@@ -1,0 +1,8 @@
+subject,session,edf,events
+sub-01,ses-01,sub-01/ses-01/eeg/sub-01_ses-01_task-training_eeg.edf,sub-01/ses-01/eeg/sub-01_ses-01_task-training_acq-rexcommand_events.pdf
+sub-01,ses-02,sub-01/ses-02/eeg/sub-01_ses-02_task-training_eeg.edf,sub-01/ses-02/eeg/sub-01_ses-02_task-training_acq-rexcommand_events.pdf
+sub-01,ses-04,sub-01/ses-04/eeg/sub-01_ses-04_task-training_eeg.edf,sub-01/ses-04/eeg/sub-01_ses-04_task-training_acq-rexcommand_events.pdf
+sub-01,ses-05,sub-01/ses-05/eeg/sub-01_ses-05_task-training_eeg.edf,sub-01/ses-05/eeg/sub-01_ses-05_task-training_acq-rexcommand_events.pdf
+sub-01,ses-06,sub-01/ses-06/eeg/sub-01_ses-06_task-training_eeg.edf,sub-01/ses-06/eeg/sub-01_ses-06_task-training_acq-rexcommand_events.pdf
+sub-01,ses-07,sub-01/ses-07/eeg/sub-01_ses-07_task-training_eeg.edf,sub-01/ses-07/eeg/sub-01_ses-07_task-training_acq-rexcommand_events.pdf
+sub-01,ses-08,sub-01/ses-08/eeg/sub-01_ses-08_task-training_eeg.edf,sub-01/ses-08/eeg/sub-01_ses-08_task-training_acq-rexcommand_events.pdf
