@@ -1,0 +1,116 @@
+{
+  "metadata": {
+    "holdout_session": "ses-01",
+    "n_train_sessions": 1,
+    "combo_index": 3,
+    "train_sessions": "ses-05",
+    "model_seed": 42,
+    "commit_sha": "25047c459adb0205705cd17abc37bdd952343e45",
+    "n_training_windows": 69,
+    "n_training_stop": 45,
+    "n_training_walk": 24,
+    "selected_features": "13;67;40;79;10;25;66;52;64;37;8;39;12;82;43;70;84;83;46;45;62;20;19;73;18",
+    "raw_accuracy": 0.7938775510204081,
+    "raw_balanced_accuracy": 0.8139851551236184,
+    "accuracy": 0.810204081632653,
+    "balanced_accuracy": 0.8314287748527083,
+    "walk_recall": 0.9153005464480874,
+    "stop_recall": 0.747557003257329,
+    "walk_support": 366,
+    "stop_support": 614,
+    "n_windows": 980,
+    "dominant_fraction": 0.5,
+    "collapse_warning": false
+  },
+  "raw": {
+    "total_windows": 980,
+    "prediction_counts": {
+      "STOP": 490,
+      "WALK": 490,
+      "IDLE": 0
+    },
+    "per_class": {
+      "STOP": {
+        "precision": 0.9204081632653062,
+        "recall": 0.7345276872964169,
+        "f1": 0.8170289855072463,
+        "support": 614
+      },
+      "WALK": {
+        "precision": 0.6673469387755102,
+        "recall": 0.8934426229508197,
+        "f1": 0.7640186915887851,
+        "support": 366
+      },
+      "IDLE": {
+        "precision": NaN,
+        "recall": NaN,
+        "f1": NaN,
+        "support": 0
+      }
+    },
+    "walk_recall": 0.8934426229508197,
+    "stop_recall": 0.7345276872964169,
+    "deployment_accuracy_non_idle": 0.7938775510204081,
+    "balanced_accuracy": 0.8139851551236184,
+    "n_non_idle_ground_truth_windows": 980,
+    "idle_false_positive_rate": 0.0,
+    "collapse_warning": false,
+    "dominant_prediction_fraction": 0.5
+  },
+  "smoothed": {
+    "total_windows": 980,
+    "prediction_counts": {
+      "STOP": 490,
+      "WALK": 490,
+      "IDLE": 0
+    },
+    "per_class": {
+      "STOP": {
+        "precision": 0.936734693877551,
+        "recall": 0.747557003257329,
+        "f1": 0.8315217391304348,
+        "support": 614
+      },
+      "WALK": {
+        "precision": 0.6836734693877551,
+        "recall": 0.9153005464480874,
+        "f1": 0.7827102803738317,
+        "support": 366
+      },
+      "IDLE": {
+        "precision": NaN,
+        "recall": NaN,
+        "f1": NaN,
+        "support": 0
+      }
+    },
+    "walk_recall": 0.9153005464480874,
+    "stop_recall": 0.747557003257329,
+    "deployment_accuracy_non_idle": 0.810204081632653,
+    "balanced_accuracy": 0.8314287748527083,
+    "n_non_idle_ground_truth_windows": 980,
+    "idle_false_positive_rate": 0.0,
+    "collapse_warning": false,
+    "dominant_prediction_fraction": 0.5
+  },
+  "configuration": {
+    "channel_set": "motor3",
+    "channel_normalization": "zscore",
+    "n_features_select": 25,
+    "lda_shrinkage": 0.1,
+    "confidence_threshold": 0.45,
+    "idle_distance_threshold": 999.0,
+    "balance_classes": "none",
+    "balance_subjects": "none",
+    "seed_values": [
+      42,
+      123,
+      2026
+    ],
+    "event_overlap_threshold": 0.5,
+    "smoothing_window": 5,
+    "window_len": 3.0,
+    "step_len": 0.25
+  }
+}
