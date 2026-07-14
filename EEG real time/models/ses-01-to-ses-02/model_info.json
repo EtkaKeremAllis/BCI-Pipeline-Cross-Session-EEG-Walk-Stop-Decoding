@@ -1,0 +1,19 @@
+{
+  "channels": [
+    "FC3",
+    "FC1",
+    "FCz",
+    "FC2",
+    "FC4",
+    "C3",
+    "Cz",
+    "C4",
+    "CPz"
+  ],
+  "sampling_rate": 100.0,
+  "window_seconds": 0.2,
+  "step_seconds": 0.05,
+  "context_seconds": 1.0,
+  "causal": true,
+  "filter": "butterworth-order2-scipy-lfilter"
+}
