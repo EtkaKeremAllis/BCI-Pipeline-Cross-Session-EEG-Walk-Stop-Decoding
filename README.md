@@ -15,6 +15,8 @@ See [v2.9_verified_cross_session_results/VERIFIED_RESULTS.md](v2.9_verified_cros
 
 The pipeline predicts command periods under conditions represented in the training data. Its outputs must not be interpreted as proof of artifact-free or purely brain-internal walking-intention decoding. Performance can be affected by subject identity, session variability, electrode placement, movement and EOG artifacts, preprocessing, class balance, and model-selection choices.
 
+**EOG artifact caveat (quantified):** see [EOG_ABLATION.md](EOG_ABLATION.md). An ablation run through this pipeline found EOG-only classification accuracy (73.47% mean balanced accuracy, `sub-02` reciprocal cross-session) far above chance, only ~2 points below EEG-only (75.59%), with EEG+EOG barely improving on EEG-only (76.91%). This confirms rather than resolves the original artifact-contamination suspicion — a meaningful share of reported EEG-only accuracy is plausibly attributable to eye-movement artifacts correlated with the WALK/STOP task structure, not solely to motor-intent signal.
+
 Use the following terminology when reporting results:
 
 - **Seen-session validation:** the evaluated recording was represented during training or model development.

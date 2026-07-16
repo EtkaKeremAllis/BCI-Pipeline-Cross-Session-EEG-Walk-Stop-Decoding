@@ -93,6 +93,13 @@ CHANNEL_SETS = {
     'motor9': ['FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'C3', 'Cz', 'C4', 'CPz'],
     'motor13': ['FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'C3', 'C1', 'Cz', 'C2', 'C4',
                 'CP3', 'CPz', 'CP4'],
+    # EOG-artifact ablation presets (see EOG_ABLATION.md): none of the motorN
+    # presets above ever included EOG channels, so this is the only way to
+    # test whether the model can classify WALK/STOP from eye-movement
+    # artifacts alone, or whether adding EOG on top of motor channels
+    # meaningfully changes accuracy.
+    'eog_only': ['EOG_HL', 'EOG_HR', 'EOG_VA', 'EOG_VB'],
+    'motor3_eog': ['C3', 'Cz', 'C4', 'EOG_HL', 'EOG_HR', 'EOG_VA', 'EOG_VB'],
 }
 # all_eeg: exclude channels whose names contain ANY of these substrings
 # (case-insensitive).
@@ -1644,9 +1651,13 @@ def main():
                         help='Temporal smoothing window (1=no smoothing)')
     parser.add_argument('--channel-normalization', choices=['none', 'zscore'], default='zscore',
                         help='Per-channel raw EEG normalization before bandpass/CSP: none | zscore')
-    parser.add_argument('--channel-set', choices=['motor3', 'motor5', 'motor9', 'motor13', 'all_eeg'],
+    parser.add_argument('--channel-set',
+                        choices=['motor3', 'motor5', 'motor9', 'motor13', 'all_eeg',
+                                 'eog_only', 'motor3_eog'],
                         default='motor3',
                         help='(train/train_multi only) EEG channel set to use. '
+                             'eog_only/motor3_eog are for the EOG-artifact ablation study '
+                             '(see EOG_ABLATION.md). '
                              'validate_timeline/predict always use the channels saved in the model.')
     parser.add_argument('--label-map', default=None,
                         help='(train/train_multi only) trial_type -> 0 (STOP) / 1 (WALK) mapping, as a '
