@@ -2,11 +2,11 @@
 
 An offline EEG-based brain-computer interface (BCI) pipeline for classifying **WALK** and **STOP** command periods and producing symbolic **WALK / STOP / IDLE** outputs.
 
-The current implementation is `bci_pipeline_v2.9.py`. It supports single-session and pooled multi-session training, full-record timeline validation, and prediction on unlabeled EDF recordings. A dependency-free local Web UI is also included.
+The current implementation is `bci_pipeline_v2.9.1.py`. It supports single-session and pooled multi-session training, full-record timeline validation, and prediction on unlabeled EDF recordings. A dependency-free local Web UI is also included.
 
 ## Experimental results
 
-See [v2.9_verified_cross_session_results/VERIFIED_RESULTS.md](v2.9_verified_cross_session_results/VERIFIED_RESULTS.md) for the reported reciprocal cross-session benchmark, exact reproduction commands, environment details, machine-readable outputs, and scientific limitations.
+See [bci_v2.9.1_cross_session_results](bci_v2.9.1_cross_session_results) for the reported reciprocal cross-session benchmark, exact reproduction commands, environment details, machine-readable outputs, and scientific limitations.
 
 > [!IMPORTANT]
 > This repository implements an offline research pipeline. It does not provide real-time EEG streaming, HID control, or vJoy output. Predictions are generated from fixed EEG recordings and saved to files.
