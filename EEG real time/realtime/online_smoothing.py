@@ -11,7 +11,8 @@ chunks - just long enough to have seen the same "future" context the
 offline centered window uses - then applies the exact same rule. The result
 is byte-for-byte identical to apply_temporal_smoothing() given the same
 input (see EEG real time/tests/test_online_smoothing.py), at the cost of
-that small, fixed extra latency (0.25-0.5s at this pipeline's step size).
+that small, fixed extra latency (`window_size//2 * step_seconds`: 50 ms for
+window 3 or 100 ms for window 5 at this pipeline's 50 ms decision step).
 
 Keeps the full raw-label history for the current session. Sessions are
 minutes long, not days, so this is a deliberate simplicity/memory tradeoff,

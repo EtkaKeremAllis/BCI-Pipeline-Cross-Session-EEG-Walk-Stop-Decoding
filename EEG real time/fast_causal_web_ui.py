@@ -4,17 +4,13 @@ from __future__ import annotations
 import argparse
 import json
 import threading
-import time
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-import numpy as np
-
 from fast_causal_bci import (
-    FastCausalModel, FeatureStream, LABELS, RecordedReplaySource,
-    event_label_at, load_recording,
+    FastCausalModel, RecordedReplaySource, load_recording, run_decision_source,
 )
 from parse_events import parse_events
 
@@ -37,16 +33,16 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
 </style></head><body><div class="wrap">
 <div class="top"><div><h1>Fast Causal BCI</h1><div class="muted">9 kanal · lfilter · 200 ms pencere · 50 ms karar</div></div><div id="status" class="badge">HAZIR</div></div>
 <div class="grid"><section class="card"><div id="state" class="state idle"><div><div class="word" id="word">IDLE</div><div class="confidence" id="confidence">Henüz tahmin yok</div></div></div>
-<div class="metrics"><div class="metric"><span>EEG zamanı</span><b id="stream">0.00 s</b></div><div class="metric"><span>Uçtan uca</span><b id="latency">—</b></div><div class="metric"><span>Feature</span><b id="feature">—</b></div><div class="metric"><span>Source jitter</span><b id="jitter">—</b></div></div>
+<div class="metrics"><div class="metric"><span>EEG zamanı</span><b id="stream">0.00 s</b></div><div class="metric"><span>Smoothing dahil</span><b id="latency">—</b></div><div class="metric"><span>Feature</span><b id="feature">—</b></div><div class="metric"><span>Source jitter</span><b id="jitter">—</b></div></div>
 <div class="bar"><i id="progress"></i></div></section>
 <section class="card"><form id="form"><label>EDF yolu</label><input id="edf" value="__EDF__"><label>Model klasörü</label><input id="model" value="__MODEL__"><label>Events TSV (opsiyonel)</label><input id="events" value="__EVENTS__"><div class="row"><div><label>Maksimum süre (sn, boş=tümü)</label><input id="maxSeconds" value="60"></div><div><label>Oynatma</label><input value="Gerçek zaman (1×)" disabled></div></div><div style="margin-top:16px"><button class="start" type="submit">▶ Başlat</button><button class="stop" type="button" id="stop">■ Durdur</button></div><div id="error" class="error"></div></form></section>
-<section class="card" style="grid-column:1/-1"><h3 style="margin-top:0">Son tahminler</h3><div class="scroll"><table><thead><tr><th>EEG zamanı</th><th>Tahmin</th><th>Güven</th><th>Gerçek</th><th>Gecikme</th></tr></thead><tbody id="rows"></tbody></table></div></section></div></div>
+<section class="card" style="grid-column:1/-1"><h3 style="margin-top:0">Son tahminler</h3><div class="scroll"><table><thead><tr><th>EEG zamanı</th><th>Tahmin</th><th>Smoothed</th><th>Güven</th><th>Gerçek</th><th>Toplam gecikme</th></tr></thead><tbody id="rows"></tbody></table></div></section></div></div>
 <script>
 const $=id=>document.getElementById(id);let timer=null;
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function start(e){e.preventDefault();$('error').textContent='';let body={edf:$('edf').value,model:$('model').value,events:$('events').value,max_seconds:$('maxSeconds').value||null};let r=await fetch('/api/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let j=await r.json();if(!r.ok)$('error').textContent=j.error||'Başlatılamadı';poll()}
 async function stop(){await fetch('/api/stop',{method:'POST'});poll()}
-async function poll(){try{let j=await(await fetch('/api/status')).json();$('status').textContent=j.running?'ÇALIŞIYOR':(j.finished?'TAMAMLANDI':'HAZIR');if(j.error)$('error').textContent=j.error;let p=j.latest;if(p){let cls=p.prediction.toLowerCase();$('state').className='state '+cls;$('word').textContent=p.prediction;$('confidence').textContent='%'+(p.confidence*100).toFixed(1)+' güven';$('stream').textContent=p.stream_time_s.toFixed(2)+' s';$('latency').textContent=p.end_to_end_ms.toFixed(2)+' ms';$('feature').textContent=p.feature_ms.toFixed(2)+' ms';$('jitter').textContent=(p.source_lateness_ms??0).toFixed(2)+' ms';$('progress').style.width=(j.progress*100).toFixed(1)+'%'}$('rows').innerHTML=(j.history||[]).slice().reverse().map(x=>`<tr><td>${x.stream_time_s.toFixed(2)} s</td><td>${esc(x.prediction)}</td><td>%${(x.confidence*100).toFixed(1)}</td><td>${esc(x.truth||'—')}</td><td>${x.end_to_end_ms.toFixed(2)} ms</td></tr>`).join('')}catch(e){}clearTimeout(timer);timer=setTimeout(poll,100)}
+async function poll(){try{let j=await(await fetch('/api/status')).json();$('status').textContent=j.running?'ÇALIŞIYOR':(j.finished?'TAMAMLANDI':'HAZIR');if(j.error)$('error').textContent=j.error;let p=j.latest;if(p){let shown=p.smoothed_prediction||p.prediction;let cls=shown.toLowerCase();$('state').className='state '+cls;$('word').textContent=shown;$('confidence').textContent='%'+(p.confidence*100).toFixed(1)+' güven';$('stream').textContent=p.stream_time_s.toFixed(2)+' s';$('latency').textContent=p.total_latency_ms.toFixed(2)+' ms';$('feature').textContent=p.feature_ms.toFixed(2)+' ms';$('jitter').textContent=(p.source_lateness_ms??0).toFixed(2)+' ms';$('progress').style.width=(j.progress*100).toFixed(1)+'%'}$('rows').innerHTML=(j.history||[]).slice().reverse().map(x=>`<tr><td>${x.stream_time_s.toFixed(2)} s</td><td>${esc(x.prediction)}</td><td>${esc(x.smoothed_prediction||'—')}</td><td>%${(x.confidence*100).toFixed(1)}</td><td>${esc(x.truth||'—')}</td><td>${x.total_latency_ms.toFixed(2)} ms</td></tr>`).join('')}catch(e){}clearTimeout(timer);timer=setTimeout(poll,100)}
 $('form').addEventListener('submit',start);$('stop').addEventListener('click',stop);poll();
 </script></body></html>"""
 
@@ -56,7 +52,7 @@ class AppState:
         self.lock = threading.Lock(); self.stop_event = threading.Event()
         self.thread = None; self.running = False; self.finished = False
         self.error = None; self.latest = None; self.history = deque(maxlen=100)
-        self.progress = 0.0
+        self.progress = 0.0; self.total = 1.0
 
     def snapshot(self):
         with self.lock:
@@ -73,6 +69,11 @@ class AppState:
 
     def stop(self): self.stop_event.set()
 
+    def _on_record(self, record):
+        with self.lock:
+            self.latest=record;self.history.append(record)
+            self.progress=min(1,record["stream_time_s"]/self.total)
+
     def _worker(self, cfg):
         try:
             model=FastCausalModel.load(cfg["model"])
@@ -80,23 +81,15 @@ class AppState:
             max_seconds=float(cfg["max_seconds"]) if cfg.get("max_seconds") else None
             total=min(len(signals[ch]) for ch in channels)/fs
             if max_seconds is not None: total=min(total,max_seconds)
-            source=RecordedReplaySource(signals,channels,fs,True,max_seconds)
+            self.total=total
+            source=RecordedReplaySource(
+                signals, channels, fs, realtime_pace=True, max_seconds=max_seconds
+            )
             events=parse_events(cfg["events"]) if cfg.get("events") else None
-            stream=FeatureStream(model.channels,model.fs,model.window_seconds,model.context_seconds)
-            chunk_samples=max(1,int(round(model.step_seconds*model.fs)))
-            for chunk in source.chunks(chunk_samples):
-                if self.stop_event.is_set(): break
-                arrived=time.perf_counter();stream.push(chunk)
-                if not stream.ready: continue
-                features=stream.features();ready=time.perf_counter()
-                pred,proba=model.predict_features(features.reshape(1,-1));decided=time.perf_counter()
-                t=stream.samples_seen/model.fs;truth=event_label_at(t,events) if events else None
-                record={"stream_time_s":t,"prediction":LABELS[int(pred[0])],
-                  "confidence":float(proba[0,int(pred[0])]),"truth":"" if truth is None else LABELS[int(truth)],
-                  "feature_ms":(ready-arrived)*1000,"decision_ms":(decided-ready)*1000,
-                  "end_to_end_ms":(decided-arrived)*1000,"source_lateness_ms":source.last_lateness_ms}
-                with self.lock:
-                    self.latest=record;self.history.append(record);self.progress=min(1,t/total)
+            run_decision_source(
+                model, source, output_csv=None, events=events,
+                on_decision=self._on_record, stop_check=self.stop_event.is_set,
+            )
         except Exception as exc:
             with self.lock:self.error=f"{type(exc).__name__}: {exc}"
         finally:

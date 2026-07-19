@@ -13,7 +13,7 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Mapping, Protocol, Sequence
+from typing import Callable, Iterator, Mapping, Protocol, Sequence
 
 import numpy as np
 from scipy import signal
@@ -22,6 +22,7 @@ from edf_reader import read_edf
 from parse_events import parse_events
 from modern_bci_v2 import SimpleLDA
 from realtime.file_replay_source import FileReplaySource
+from realtime.online_smoothing import OnlineSmoother
 
 
 LABELS = {0: "STOP", 1: "WALK", 2: "IDLE"}
@@ -338,7 +339,10 @@ def validate(model, edf_path, events_path):
     }
 
 
-def run_decision_source(model, source: ChunkSource, output_csv=None, events=None):
+def run_decision_source(model, source: ChunkSource, output_csv=None, events=None,
+                        on_decision: Callable[[dict], None] | None = None,
+                        stop_check: Callable[[], bool] | None = None,
+                        smoothing_window: int = 3):
     """Run one causal decision loop for either replay or a live EEG device."""
     if list(source.channels) != list(model.channels):
         raise ValueError(f"Channel/order mismatch: source={source.channels}, model={model.channels}")
@@ -348,7 +352,27 @@ def run_decision_source(model, source: ChunkSource, output_csv=None, events=None
                            model.context_seconds)
     chunk_samples = max(1, int(round(model.step_seconds * model.fs)))
     records = []
+    pending_records = deque()
+    smoother = OnlineSmoother(smoothing_window)
+    smoothing_delay_ms = (smoothing_window // 2) * model.step_seconds * 1000
+
+    def emit_record(record, smoothed_label, arrived):
+        emitted = time.perf_counter()
+        record["smoothed_prediction"] = LABELS[int(smoothed_label)]
+        record["smoothing_delay_ms"] = smoothing_delay_ms
+        record["smoothing_wall_delay_ms"] = max(
+            0.0, (emitted - arrived) * 1000 - record["end_to_end_ms"]
+        )
+        record["total_latency_ms"] = (
+            record["end_to_end_ms"] + record["smoothing_wall_delay_ms"]
+        )
+        records.append(record)
+        if on_decision:
+            on_decision(record)
+
     for chunk in source.chunks(chunk_samples):
+        if stop_check and stop_check():
+            break
         arrived = time.perf_counter()
         stream.push(chunk)
         if not stream.ready:
@@ -359,28 +383,40 @@ def run_decision_source(model, source: ChunkSource, output_csv=None, events=None
         decided = time.perf_counter()
         stream_time = stream.samples_seen / model.fs
         truth = event_label_at(stream_time, events) if events else None
-        records.append({
+        raw_label = int(pred[0])
+        record = {
             "stream_time_s": stream_time,
-            "prediction": LABELS[int(pred[0])],
-            "confidence": float(proba[0, int(pred[0])]),
+            "prediction": LABELS[raw_label],
+            "confidence": float(proba[0, raw_label]),
             "truth": "" if truth is None else LABELS[int(truth)],
             "feature_ms": (features_ready - arrived) * 1000,
             "decision_ms": (decided - features_ready) * 1000,
             "end_to_end_ms": (decided - arrived) * 1000,
             "source_lateness_ms": getattr(source, "last_lateness_ms", np.nan),
-        })
+        }
+        pending_records.append((record, arrived))
+        for smoothed_label in smoother.push(raw_label):
+            pending_record, pending_arrived = pending_records.popleft()
+            emit_record(pending_record, smoothed_label, pending_arrived)
+
+    for smoothed_label in smoother.flush():
+        pending_record, pending_arrived = pending_records.popleft()
+        emit_record(pending_record, smoothed_label, pending_arrived)
     if output_csv:
         path = Path(output_csv); path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=records[0].keys() if records else [
                 "stream_time_s", "prediction", "confidence", "truth", "feature_ms",
-                "decision_ms", "end_to_end_ms", "source_lateness_ms"
+                "decision_ms", "end_to_end_ms", "source_lateness_ms",
+                "smoothed_prediction", "smoothing_delay_ms",
+                "smoothing_wall_delay_ms", "total_latency_ms"
             ])
             writer.writeheader(); writer.writerows(records)
     if not records:
         return {"n_decisions": 0}
     summary = {"n_decisions": len(records)}
-    for field in ("feature_ms", "decision_ms", "end_to_end_ms", "source_lateness_ms"):
+    for field in ("feature_ms", "decision_ms", "end_to_end_ms", "source_lateness_ms",
+                  "smoothing_delay_ms", "smoothing_wall_delay_ms", "total_latency_ms"):
         values = np.asarray([row[field] for row in records], dtype=float)
         values = values[np.isfinite(values)]
         summary[field] = {
@@ -407,6 +443,7 @@ def main(argv=None):
     parser.add_argument("--context", type=float, default=None)
     parser.add_argument("--output", default="replay_timing.csv")
     parser.add_argument("--max-seconds", type=float, default=None)
+    parser.add_argument("--smoothing-window", type=int, choices=[1, 3, 5], default=3)
     args = parser.parse_args(argv)
     if args.mode == "train":
         if not args.events:
@@ -427,7 +464,9 @@ def main(argv=None):
         source = RecordedReplaySource(signals, channels, fs, realtime_pace=True,
                                       max_seconds=args.max_seconds)
         events = parse_events(args.events) if args.events else None
-        summary = run_decision_source(model, source, args.output, events)
+        summary = run_decision_source(
+            model, source, args.output, events, smoothing_window=args.smoothing_window
+        )
         print(json.dumps(summary, indent=2))
 
 
