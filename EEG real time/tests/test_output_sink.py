@@ -45,6 +45,8 @@ def _sample_decision(smoothed_label=1):
         feature_ms=2.1,
         decision_ms=0.05,
         end_to_end_ms=2.15,
+        smoothing_wall_delay_ms=0.3,
+        total_latency_ms=2.45,
     )
 
 
@@ -59,6 +61,9 @@ def test_console_output_writes_readable_line():
 
 
 def test_console_output_handles_unresolved_smoothed_label():
+    # DecisionEngine itself never yields smoothed_label=None any more (see
+    # decision_engine.py's pending-queue re-pairing) - this is a defensive
+    # robustness check for any other OutputSink caller that might.
     stream = io.StringIO()
     with ConsoleOutput(stream=stream) as sink:
         sink.write(_sample_decision(smoothed_label=None))
@@ -80,6 +85,7 @@ def test_csv_output_round_trips(tmp_path):
     assert rows[0]["smoothed_label"] == "WALK"
     assert rows[1]["smoothed_label"] == ""
     assert float(rows[0]["confidence"]) == pytest.approx(0.83)
+    assert float(rows[0]["total_latency_ms"]) == pytest.approx(2.45)
 
 
 def test_websocket_output_broadcasts_to_all_subscribers():
@@ -150,6 +156,9 @@ def test_integration_with_real_decision_engine(tmp_path):
     n_written = 0
     with MultiOutput([CSVOutput(csv_path), ws_sink]) as sink:
         for decision in engine.run(source):
+            sink.write(decision)
+            n_written += 1
+        for decision in engine.flush():  # trailing pending tail, easy to forget
             sink.write(decision)
             n_written += 1
 
