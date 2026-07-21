@@ -9,7 +9,9 @@ The current implementation is `bci_pipeline_v2.9.1.py`. It supports single-sessi
 See [bci_v2.9.1_cross_session_results](bci_v2.9.1_cross_session_results) for the reported reciprocal cross-session benchmark, exact reproduction commands, environment details, machine-readable outputs, and scientific limitations.
 
 > [!IMPORTANT]
-> This repository implements an offline research pipeline. It does not provide real-time EEG streaming, HID control, or vJoy output. Predictions are generated from fixed EEG recordings and saved to files.
+> The pipeline documented in this README (`bci_pipeline_v2.9.1.py`) is an offline research pipeline. It does not provide real-time EEG streaming, HID control, or vJoy output. Predictions are generated from fixed EEG recordings and saved to files.
+>
+> A separate, experimental real-time-capable subsystem exists in [`EEG real time/`](EEG%20real%20time/) (a causal classifier plus a source/decision/output pipeline). It has been validated by **replaying recorded EEG as if it were arriving live** — genuine real-time pacing, latency, and CPU-headroom measurements exist (see [`EEG real time/REALTIME_E2E.md`](EEG%20real%20time/REALTIME_E2E.md)), but **none of it has been tested against real EEG hardware**, since no hardware is available to this project. See [`EEG real time/ARCHITECTURE.md`](EEG%20real%20time/ARCHITECTURE.md) for the full scope note and design.
 
 ## Scientific scope
 

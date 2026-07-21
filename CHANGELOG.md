@@ -129,6 +129,51 @@ EEG and producing a symbolic joystick command (WALK/STOP/IDLE).
 
   ```bash
   pytest tests/ -v
+  ```
+
+## Real-time subsystem (`EEG real time/`)
+
+A separate, experimental real-time-capable classifier and pipeline,
+independent from the offline `bci_pipeline_v2.9.1.py` workflow above. See
+`EEG real time/ARCHITECTURE.md` for the full design and scope note
+(**replay-simulation only, not tested against real EEG hardware**).
+
+- `fast_causal_bci.py` — a from-scratch causal classifier: stateful IIR
+  filter bank (`scipy.signal.lfilter`), multi-scale energy/correlation
+  features, the same shrinkage-LDA core reused from `modern_bci_v2.py`.
+  Documented benchmark in `WEB_UI.md`: ~73.77% cross-session balanced
+  accuracy.
+- `fast_causal_web_ui.py` — a local, real-time-paced replay demo UI for
+  the classifier above.
+- `realtime/` package (built around `fast_causal_bci.py` without modifying
+  its filter/feature/model core):
+  - `eeg_source.py` — `EEGSource`, a source-agnostic streaming Protocol
+    (`sampling_rate`, `channels`, `is_live`, `chunks()`, `close()`).
+  - `file_replay_source.py` — `FileReplaySource`, replays a recorded EDF
+    as real-time-paced device-like chunks (drift-free absolute scheduling
+    deadlines).
+  - `online_smoothing.py` — `OnlineSmoother`, a causal, delayed
+    counterpart to the offline pipeline's centered
+    `apply_temporal_smoothing()`; verified byte-for-byte identical given
+    the same input.
+  - `decision_engine.py` — `DecisionEngine`, the online inference loop:
+    predict -> confidence gate (IDLE) -> `OnlineSmoother`, yielding
+    correctly-paired raw/smoothed `Decision` objects with per-decision
+    latency.
+  - `output_sink.py` — `OutputSink` and four implementations
+    (`ConsoleOutput`, `CSVOutput`, `WebSocketOutput`, `HardwareOutput`
+    placeholder) plus `MultiOutput` fan-out.
+  - `web_ui_live.py` — a local HTTP replay UI backed by `DecisionEngine` +
+    `WebSocketOutput`, reusing the same UI already verified in
+    `fast_causal_web_ui.py`.
+- End-to-end verification (`EEG real time/REALTIME_E2E.md`,
+  `EEG real time/tests/test_realtime_e2e.py`): the online chain agrees
+  exactly with the offline batch reference (`validate()`) on every window
+  they both compute; an 8.0s real-time-paced replay took 8.01s wall-clock;
+  processing a full 247.98s recording unpaced took only 3.96% of that in
+  CPU time.
+- 81 tests across this subsystem (`EEG real time/tests/`), independent of
+  the root repository's own 24-test suite.
 
 ---
 
