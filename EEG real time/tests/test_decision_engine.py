@@ -27,6 +27,7 @@ from fast_causal_bci import FastCausalModel, LABELS, load_recording, run_decisio
 from realtime.decision_engine import DecisionEngine, IDLE_LABEL  # noqa: E402
 from realtime.eeg_source import EEGSource  # noqa: E402
 from realtime.file_replay_source import FileReplaySource  # noqa: E402
+from realtime.online_smoothing import OnlineSmoother  # noqa: E402
 
 MODEL_DIR = os.path.join(EEG_REALTIME_DIR, "models", "ses-01-to-ses-02")
 TEST_EDF = os.path.join(REPO_ROOT, "sub-02", "ses-02", "eeg",
@@ -54,15 +55,21 @@ def _replay_source(recording):
     return FileReplaySource(signals, channels, fs, realtime_pace=False)
 
 
+def _run_all(engine, source):
+    decisions = list(engine.run(source))
+    decisions.extend(engine.flush())
+    return decisions
+
+
 def test_source_satisfies_eeg_source_protocol(recording):
     assert isinstance(_replay_source(recording), EEGSource)
 
 
 def test_matches_existing_run_decision_source(model, recording):
-    """With smoothing_window=1 (no smoothing) and confidence_threshold=0.0
-    (no gating), DecisionEngine must reproduce fast_causal_bci's own,
-    already-verified run_decision_source() exactly - same raw label and
-    confidence for every decision."""
+    """With smoothing_window=1 (no smoothing delay) and confidence_threshold=0.0
+    (no gating), every decision resolves immediately during run() (flush()
+    returns nothing), reproducing fast_causal_bci's own, already-verified
+    run_decision_source() exactly - same raw label and confidence."""
     with tempfile.TemporaryDirectory() as tmp:
         ref_csv = os.path.join(tmp, "ref.csv")
         run_decision_source(model, _replay_source(recording), output_csv=ref_csv, events=None)
@@ -71,22 +78,79 @@ def test_matches_existing_run_decision_source(model, recording):
 
     engine = DecisionEngine(model, smoothing_window=1, confidence_threshold=0.0)
     decisions = list(engine.run(_replay_source(recording)))
+    assert engine.flush() == []
 
     assert len(decisions) == len(ref_rows)
     for ref_row, decision in zip(ref_rows, decisions):
         assert LABELS[decision.raw_label] == ref_row["prediction"]
         assert abs(float(ref_row["confidence"]) - decision.confidence) < 1e-9
+        assert decision.smoothed_label == decision.raw_label  # window=1 -> no smoothing
 
 
 @pytest.mark.parametrize("smoothing_window", [1, 3, 5])
-def test_smoothed_stream_is_fully_resolved_after_flush(model, recording, smoothing_window):
+def test_flush_resolves_exactly_the_pending_tail(model, recording, smoothing_window):
     engine = DecisionEngine(model, smoothing_window=smoothing_window, confidence_threshold=0.0)
-    decisions = list(engine.run(_replay_source(recording)))
-    tail = engine.flush()
+    from_run = list(engine.run(_replay_source(recording)))
+    from_flush = engine.flush()
 
-    n_pending_at_end = sum(1 for d in decisions if d.smoothed_label is None)
-    assert n_pending_at_end == smoothing_window // 2
-    assert len(tail) == n_pending_at_end
+    assert len(from_flush) == smoothing_window // 2
+    assert engine.flush() == []  # idempotent once drained
+
+    baseline = DecisionEngine(model, smoothing_window=1, confidence_threshold=0.0)
+    total_windows = len(list(baseline.run(_replay_source(recording))))
+    assert len(from_run) + len(from_flush) == total_windows
+
+
+def test_raw_and_smoothed_labels_stay_correctly_paired(model, recording):
+    """Regression guard for the pairing bug this slice fixed: every yielded
+    Decision's smoothed_label must belong to the SAME stream_time_s as its
+    own raw_label, not an earlier one still working its way through the
+    smoothing window."""
+    engine = DecisionEngine(model, smoothing_window=3, confidence_threshold=0.0)
+    decisions = _run_all(engine, _replay_source(recording))
+
+    raw_labels = [d.raw_label for d in decisions]
+    expected_smoothed = []
+    smoother = OnlineSmoother(3)
+    for label in raw_labels:
+        expected_smoothed.extend(smoother.push(label))
+    expected_smoothed.extend(smoother.flush())
+
+    assert [d.smoothed_label for d in decisions] == expected_smoothed
+    # stream_time_s must stay strictly increasing in yield order - proof no
+    # record got skipped or duplicated by the pending-queue re-pairing.
+    times = [d.stream_time_s for d in decisions]
+    assert times == sorted(times)
+    assert len(set(times)) == len(times)
+
+
+def test_latency_fields_are_sane(model, recording):
+    engine = DecisionEngine(model, smoothing_window=3, confidence_threshold=0.0)
+    decisions = _run_all(engine, _replay_source(recording))
+
+    for d in decisions:
+        assert d.end_to_end_ms >= 0
+        assert d.smoothing_wall_delay_ms >= 0
+        assert d.total_latency_ms == pytest.approx(d.end_to_end_ms + d.smoothing_wall_delay_ms)
+
+
+def test_stop_check_ends_the_loop_early(model, recording):
+    # FeatureStream needs context_seconds/step_seconds chunks to warm up
+    # before it ever becomes ready (~20 chunks for this model) - stop well
+    # past that point so some decisions get through before stopping.
+    calls = {"n": 0}
+
+    def stop_after_forty_chunks():
+        calls["n"] += 1
+        return calls["n"] > 40
+
+    engine = DecisionEngine(model, smoothing_window=1, confidence_threshold=0.0)
+    decisions = list(engine.run(_replay_source(recording), stop_check=stop_after_forty_chunks))
+
+    full_engine = DecisionEngine(model, smoothing_window=1, confidence_threshold=0.0)
+    full_decisions = list(full_engine.run(_replay_source(recording)))
+
+    assert 0 < len(decisions) < len(full_decisions)
 
 
 def test_extreme_confidence_threshold_gates_most_decisions_to_idle(model, recording):

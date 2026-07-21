@@ -65,11 +65,13 @@ class ConsoleOutput:
 
 class CSVOutput:
     """Write each decision as one CSV row - the same fields fast_causal_bci's
-    own output_csv already writes, plus the smoothed label DecisionEngine adds."""
+    own output_csv already writes, plus the smoothed label and smoothing-delay
+    latency breakdown DecisionEngine adds."""
 
     FIELDNAMES = [
         "stream_time_s", "raw_label", "confidence", "smoothed_label",
         "feature_ms", "decision_ms", "end_to_end_ms",
+        "smoothing_wall_delay_ms", "total_latency_ms",
     ]
 
     def __init__(self, path):
@@ -88,6 +90,8 @@ class CSVOutput:
             "feature_ms": decision.feature_ms,
             "decision_ms": decision.decision_ms,
             "end_to_end_ms": decision.end_to_end_ms,
+            "smoothing_wall_delay_ms": getattr(decision, "smoothing_wall_delay_ms", ""),
+            "total_latency_ms": getattr(decision, "total_latency_ms", decision.end_to_end_ms),
         })
 
     def close(self) -> None:
@@ -131,7 +135,11 @@ class WebSocketOutput:
             "raw_label": LABELS[decision.raw_label],
             "confidence": decision.confidence,
             "smoothed_label": None if decision.smoothed_label is None else LABELS[decision.smoothed_label],
+            "feature_ms": decision.feature_ms,
+            "decision_ms": decision.decision_ms,
             "end_to_end_ms": decision.end_to_end_ms,
+            "smoothing_wall_delay_ms": getattr(decision, "smoothing_wall_delay_ms", None),
+            "total_latency_ms": getattr(decision, "total_latency_ms", decision.end_to_end_ms),
         }
         for q in list(self._subscribers):
             q.put(message)
