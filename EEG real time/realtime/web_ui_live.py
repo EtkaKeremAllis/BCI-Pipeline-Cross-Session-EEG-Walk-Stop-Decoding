@@ -22,11 +22,14 @@ from __future__ import annotations
 import argparse
 import json
 import queue
+import sys
 import threading
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from fast_causal_bci import FastCausalModel, event_label_at, load_recording
 from parse_events import parse_events
@@ -35,7 +38,7 @@ from realtime.file_replay_source import FileReplaySource
 from realtime.output_sink import LABELS, WebSocketOutput
 
 HTML = r"""<!doctype html>
-<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Phase B Live BCI</title><style>
 :root{font-family:Inter,system-ui,sans-serif;color:#e8eef7;background:#07111f}*{box-sizing:border-box}
 body{margin:0;background:radial-gradient(circle at 20% 0,#173256 0,#07111f 45%);min-height:100vh}
@@ -50,18 +53,18 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
 .bar{height:7px;border-radius:9px;background:#091726;overflow:hidden;margin-top:12px}.bar i{display:block;height:100%;background:#4bd5a0;width:0}.error{color:#ff8790;min-height:20px;margin-top:8px;font-size:13px}
 @media(max-width:850px){.grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}.state .word{font-size:50px}}
 </style></head><body><div class="wrap">
-<div class="top"><div><h1>Phase B Live BCI</h1><div class="muted">DecisionEngine + WebSocketOutput üzerinden canlı yayın</div></div><div id="status" class="badge">HAZIR</div></div>
-<div class="grid"><section class="card"><div id="state" class="state idle"><div><div class="word" id="word">IDLE</div><div class="confidence" id="confidence">Henüz tahmin yok</div></div></div>
-<div class="metrics"><div class="metric"><span>EEG zamanı</span><b id="stream">0.00 s</b></div><div class="metric"><span>Smoothing dahil</span><b id="latency">—</b></div><div class="metric"><span>Feature</span><b id="feature">—</b></div><div class="metric"><span>Source jitter</span><b id="jitter">—</b></div></div>
+<div class="top"><div><h1>Phase B Live BCI</h1><div class="muted">Live stream via DecisionEngine + WebSocketOutput</div></div><div id="status" class="badge">READY</div></div>
+<div class="grid"><section class="card"><div id="state" class="state idle"><div><div class="word" id="word">IDLE</div><div class="confidence" id="confidence">No prediction yet</div></div></div>
+<div class="metrics"><div class="metric"><span>EEG time</span><b id="stream">0.00 s</b></div><div class="metric"><span>Incl. smoothing</span><b id="latency">—</b></div><div class="metric"><span>Feature</span><b id="feature">—</b></div><div class="metric"><span>Source jitter</span><b id="jitter">—</b></div></div>
 <div class="bar"><i id="progress"></i></div></section>
-<section class="card"><form id="form"><label>EDF yolu</label><input id="edf" value="__EDF__"><label>Model klasörü</label><input id="model" value="__MODEL__"><label>Events TSV (opsiyonel)</label><input id="events" value="__EVENTS__"><div class="row"><div><label>Maksimum süre (sn, boş=tümü)</label><input id="maxSeconds" value="60"></div><div><label>Smoothing window</label><input id="smoothingWindow" value="3"></div></div><div style="margin-top:16px"><button class="start" type="submit">▶ Başlat</button><button class="stop" type="button" id="stop">■ Durdur</button></div><div id="error" class="error"></div></form></section>
-<section class="card" style="grid-column:1/-1"><h3 style="margin-top:0">Son tahminler</h3><div class="scroll"><table><thead><tr><th>EEG zamanı</th><th>Raw</th><th>Smoothed</th><th>Güven</th><th>Gerçek</th><th>Toplam gecikme</th></tr></thead><tbody id="rows"></tbody></table></div></section></div></div>
+<section class="card"><form id="form"><label>EDF path</label><input id="edf" value="__EDF__"><label>Model folder</label><input id="model" value="__MODEL__"><label>Events TSV (optional)</label><input id="events" value="__EVENTS__"><div class="row"><div><label>Max duration (s, empty=all)</label><input id="maxSeconds" value="60"></div><div><label>Smoothing window</label><input id="smoothingWindow" value="3"></div></div><div style="margin-top:16px"><button class="start" type="submit">▶ Start</button><button class="stop" type="button" id="stop">■ Stop</button></div><div id="error" class="error"></div></form></section>
+<section class="card" style="grid-column:1/-1"><h3 style="margin-top:0">Recent predictions</h3><div class="scroll"><table><thead><tr><th>EEG time</th><th>Raw</th><th>Smoothed</th><th>Confidence</th><th>Truth</th><th>Total latency</th></tr></thead><tbody id="rows"></tbody></table></div></section></div></div>
 <script>
 const $=id=>document.getElementById(id);let timer=null;
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function start(e){e.preventDefault();$('error').textContent='';let body={edf:$('edf').value,model:$('model').value,events:$('events').value,max_seconds:$('maxSeconds').value||null,smoothing_window:$('smoothingWindow').value||3};let r=await fetch('/api/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let j=await r.json();if(!r.ok)$('error').textContent=j.error||'Başlatılamadı';poll()}
+async function start(e){e.preventDefault();$('error').textContent='';let body={edf:$('edf').value,model:$('model').value,events:$('events').value,max_seconds:$('maxSeconds').value||null,smoothing_window:$('smoothingWindow').value||3};let r=await fetch('/api/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let j=await r.json();if(!r.ok)$('error').textContent=j.error||'Failed to start';poll()}
 async function stop(){await fetch('/api/stop',{method:'POST'});poll()}
-async function poll(){try{let j=await(await fetch('/api/status')).json();$('status').textContent=j.running?'ÇALIŞIYOR':(j.finished?'TAMAMLANDI':'HAZIR');if(j.error)$('error').textContent=j.error;let p=j.latest;if(p){let shown=p.smoothed_label||p.raw_label;let cls=shown.toLowerCase();$('state').className='state '+cls;$('word').textContent=shown;$('confidence').textContent='%'+(p.confidence*100).toFixed(1)+' güven';$('stream').textContent=p.stream_time_s.toFixed(2)+' s';$('latency').textContent=p.total_latency_ms.toFixed(2)+' ms';$('feature').textContent=p.feature_ms.toFixed(2)+' ms';$('jitter').textContent=(p.source_lateness_ms??0).toFixed(2)+' ms';$('progress').style.width=(j.progress*100).toFixed(1)+'%'}$('rows').innerHTML=(j.history||[]).slice().reverse().map(x=>`<tr><td>${x.stream_time_s.toFixed(2)} s</td><td>${esc(x.raw_label)}</td><td>${esc(x.smoothed_label||'—')}</td><td>%${(x.confidence*100).toFixed(1)}</td><td>${esc(x.truth||'—')}</td><td>${x.total_latency_ms.toFixed(2)} ms</td></tr>`).join('')}catch(e){}clearTimeout(timer);timer=setTimeout(poll,100)}
+async function poll(){try{let j=await(await fetch('/api/status')).json();$('status').textContent=j.running?'RUNNING':(j.finished?'FINISHED':'READY');if(j.error)$('error').textContent=j.error;let p=j.latest;if(p){let shown=p.smoothed_label||p.raw_label;let cls=shown.toLowerCase();$('state').className='state '+cls;$('word').textContent=shown;$('confidence').textContent=(p.confidence*100).toFixed(1)+'% confidence';$('stream').textContent=p.stream_time_s.toFixed(2)+' s';$('latency').textContent=p.total_latency_ms.toFixed(2)+' ms';$('feature').textContent=p.feature_ms.toFixed(2)+' ms';$('jitter').textContent=(p.source_lateness_ms??0).toFixed(2)+' ms';$('progress').style.width=(j.progress*100).toFixed(1)+'%'}$('rows').innerHTML=(j.history||[]).slice().reverse().map(x=>`<tr><td>${x.stream_time_s.toFixed(2)} s</td><td>${esc(x.raw_label)}</td><td>${esc(x.smoothed_label||'—')}</td><td>${(x.confidence*100).toFixed(1)}%</td><td>${esc(x.truth||'—')}</td><td>${x.total_latency_ms.toFixed(2)} ms</td></tr>`).join('')}catch(e){}clearTimeout(timer);timer=setTimeout(poll,100)}
 $('form').addEventListener('submit',start);$('stop').addEventListener('click',stop);poll();
 </script></body></html>"""
 
@@ -90,7 +93,7 @@ class AppState:
     def start(self, config):
         with self.lock:
             if self.running:
-                raise RuntimeError("Bir replay zaten çalışıyor")
+                raise RuntimeError("A replay is already running")
             self.stop_event.clear()
             self.running = True
             self.finished = False

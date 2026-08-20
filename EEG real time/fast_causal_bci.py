@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import sys
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -17,6 +18,10 @@ from typing import Iterator, Mapping, Protocol, Sequence
 
 import numpy as np
 from scipy import signal
+
+# edf_reader/parse_events/modern_bci_v2 live at the repo root, shared with
+# the offline pipeline - not duplicated here, to avoid the two copies drifting.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from edf_reader import read_edf
 from parse_events import parse_events

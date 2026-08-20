@@ -1,27 +1,29 @@
-# Canli tahmin web arayuzu
+# Live prediction Web UI
 
-Arayuz EDF kaydini gercek EEG hizinda oynatir ve WALK/STOP tahminlerini,
-guven skorunu, EEG zamanini ve gecikme metriklerini tarayicida canli gosterir.
+The UI replays an EDF recording at real EEG speed and shows WALK/STOP
+predictions, confidence score, EEG time, and latency metrics live in the
+browser.
 
-## Kurulum
+## Setup
 
 ```powershell
-python -m pip install -r requirements.txt
+python -m pip install -r ../requirements.txt
 ```
 
-## Calistirma
+## Running
 
-`latest` klasorunde:
+From this folder:
 
 ```powershell
 python fast_causal_web_ui.py --port 8766
 ```
 
-Ardindan tarayicida `http://127.0.0.1:8766` adresini acin. Arayuzde EDF dosyasini
-ve uygun model klasorunu secip **Baslat** dugmesine basin. Events TSV zorunlu
-degildir; verilirse gercek etiket de son tahminler tablosunda gosterilir.
+Then open `http://127.0.0.1:8766` in your browser. In the UI, pick the EDF
+file and the matching model folder, then click **Start**. An events TSV is
+optional; if supplied, the ground-truth label is also shown in the recent
+predictions table.
 
-Komut satirindan varsayilan alanlar da verilebilir:
+Default field values can also be passed on the command line:
 
 ```powershell
 python fast_causal_web_ui.py --port 8766 `
@@ -30,10 +32,11 @@ python fast_causal_web_ui.py --port 8766 `
   --events "C:\\data\\events.tsv"
 ```
 
-Sunucu guvenlik amaciyla varsayilan olarak yalnizca `127.0.0.1` uzerinde acilir.
+The server binds to `127.0.0.1` only by default, for security.
 
-## Dogrulama
+## Verification
 
-3 saniyelik gercek-zaman tempolu EDF smoke testinde HTTP arayuzu 200 dondu,
-41 tahmin UI API'sine ulasti ve hata olusmadi. Bu arayuz modeli degistirmez;
-son capraz-oturum balanced accuracy degeri `%73.77` olarak kalir.
+In a 3-second real-time-paced EDF smoke test, the HTTP UI returned 200, 41
+predictions reached the UI API, and no errors occurred. This UI does not
+change the model - the reported cross-session balanced accuracy stays at
+**73.77%**.

@@ -142,7 +142,7 @@ def test_cannot_start_while_already_running(server):
         "max_seconds": None, "smoothing_window": 1,
     })
     assert status == 400
-    assert b"zaten" in body
+    assert b"already running" in body
 
     _post(server, "/api/stop", {})
     _wait_until_finished(server)
